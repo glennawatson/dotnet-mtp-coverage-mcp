@@ -28,37 +28,85 @@ public sealed record ClassCoverage(
     IReadOnlyList<LineCoverage> Lines)
 {
     /// <summary>
+    /// Pre-computed line and branch coverage counts, calculated once at construction time.
+    /// </summary>
+    private readonly (int CoveredLines, int CoverableLines, int MissedLines, int TotalBranches, int CoveredBranches) _counts = ComputeCounts(Lines);
+
+    /// <summary>
     /// Gets the short class name without namespace.
     /// </summary>
-    public string ShortName => Name.Contains('.') ? Name[(Name.LastIndexOf('.') + 1)..] : Name;
+    public string ShortName { get; } = Name.LastIndexOf('.') is var idx and >= 0 ? Name[(idx + 1)..] : Name;
 
     /// <summary>
     /// Gets the count of covered lines in this class.
     /// </summary>
-    public int CoveredLineCount => Lines.Count(l => l.Status is LineVisitStatus.Covered or LineVisitStatus.PartiallyCovered);
+    public int CoveredLineCount => _counts.CoveredLines;
 
     /// <summary>
     /// Gets the count of coverable lines in this class.
     /// </summary>
-    public int CoverableLineCount => Lines.Count(l => l.Status is not LineVisitStatus.NotCoverable);
+    public int CoverableLineCount => _counts.CoverableLines;
 
     /// <summary>
     /// Gets the count of missed (not covered) lines in this class.
     /// </summary>
-    public int MissedLineCount => Lines.Count(l => l.Status is LineVisitStatus.NotCovered);
+    public int MissedLineCount => _counts.MissedLines;
 
     /// <summary>
     /// Gets the total branch count across all lines.
     /// </summary>
-    public int TotalBranchCount => Lines.Where(l => l.TotalBranches.HasValue).Sum(l => l.TotalBranches!.Value);
+    public int TotalBranchCount => _counts.TotalBranches;
 
     /// <summary>
     /// Gets the covered branch count across all lines.
     /// </summary>
-    public int CoveredBranchCount => Lines.Where(l => l.CoveredBranches.HasValue).Sum(l => l.CoveredBranches!.Value);
+    public int CoveredBranchCount => _counts.CoveredBranches;
 
     /// <summary>
     /// Gets the missed branch count across all lines.
     /// </summary>
-    public int MissedBranchCount => TotalBranchCount - CoveredBranchCount;
+    public int MissedBranchCount => _counts.TotalBranches - _counts.CoveredBranches;
+
+    /// <summary>
+    /// Computes all line and branch coverage counts in a single pass over the lines collection.
+    /// </summary>
+    /// <param name="lines">The line coverage entries to analyze.</param>
+    /// <returns>A tuple containing the pre-computed coverage counts.</returns>
+    private static (int CoveredLines, int CoverableLines, int MissedLines, int TotalBranches, int CoveredBranches) ComputeCounts(IReadOnlyList<LineCoverage> lines)
+    {
+        var coveredLines = 0;
+        var coverableLines = 0;
+        var missedLines = 0;
+        var totalBranches = 0;
+        var coveredBranches = 0;
+
+        foreach (var line in lines)
+        {
+            if (line.Status is not LineVisitStatus.NotCoverable)
+            {
+                coverableLines++;
+            }
+
+            if (line.Status is LineVisitStatus.Covered or LineVisitStatus.PartiallyCovered)
+            {
+                coveredLines++;
+            }
+            else if (line.Status is LineVisitStatus.NotCovered)
+            {
+                missedLines++;
+            }
+
+            if (line.TotalBranches is { } total)
+            {
+                totalBranches += total;
+            }
+
+            if (line.CoveredBranches is { } covered)
+            {
+                coveredBranches += covered;
+            }
+        }
+
+        return (coveredLines, coverableLines, missedLines, totalBranches, coveredBranches);
+    }
 }

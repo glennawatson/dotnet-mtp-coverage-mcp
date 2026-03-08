@@ -26,6 +26,11 @@ public sealed record MethodCoverage(
     IReadOnlyList<LineCoverage> Lines)
 {
     /// <summary>
+    /// Pre-computed line coverage counts, calculated once at construction time.
+    /// </summary>
+    private readonly (int CoveredLines, int CoverableLines) _counts = ComputeCounts(Lines);
+
+    /// <summary>
     /// Gets the CRAP score (Change Risk Anti-Patterns).
     /// Formula: CC^2 * U^3 + CC where CC = cyclomatic complexity, U = uncovered percentage.
     /// </summary>
@@ -49,10 +54,36 @@ public sealed record MethodCoverage(
     /// <summary>
     /// Gets the count of covered lines in this method.
     /// </summary>
-    public int CoveredLineCount => Lines.Count(l => l.Status is LineVisitStatus.Covered or LineVisitStatus.PartiallyCovered);
+    public int CoveredLineCount => _counts.CoveredLines;
 
     /// <summary>
     /// Gets the count of coverable lines in this method.
     /// </summary>
-    public int CoverableLineCount => Lines.Count(l => l.Status is not LineVisitStatus.NotCoverable);
+    public int CoverableLineCount => _counts.CoverableLines;
+
+    /// <summary>
+    /// Computes covered and coverable line counts in a single pass over the lines collection.
+    /// </summary>
+    /// <param name="lines">The line coverage entries to analyze.</param>
+    /// <returns>A tuple containing the pre-computed line coverage counts.</returns>
+    private static (int CoveredLines, int CoverableLines) ComputeCounts(IReadOnlyList<LineCoverage> lines)
+    {
+        var coveredLines = 0;
+        var coverableLines = 0;
+
+        foreach (var line in lines)
+        {
+            if (line.Status is not LineVisitStatus.NotCoverable)
+            {
+                coverableLines++;
+            }
+
+            if (line.Status is LineVisitStatus.Covered or LineVisitStatus.PartiallyCovered)
+            {
+                coveredLines++;
+            }
+        }
+
+        return (coveredLines, coverableLines);
+    }
 }

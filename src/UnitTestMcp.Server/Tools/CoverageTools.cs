@@ -213,7 +213,7 @@ public static class CoverageTools
     /// <returns>A markdown-formatted string for this file.</returns>
     private static string FormatFileReport(FileMissedCoverage fileReport)
     {
-        var sb = new StringBuilder();
+        var sb = new StringBuilder(256);
         sb.AppendLine($"## {fileReport.FilePath}");
 
         if (fileReport.MissedLines.Count > 0)
@@ -380,7 +380,7 @@ public static class CoverageTools
             return "none";
         }
 
-        var ranges = new List<string>();
+        var sb = new StringBuilder(lines.Count * 4);
         var start = lines[0];
         var end = start;
 
@@ -392,13 +392,27 @@ public static class CoverageTools
             }
             else
             {
-                ranges.Add(start == end ? start.ToString() : $"{start}-{end}");
+                AppendRange(sb, start, end);
                 start = lines[i];
                 end = start;
             }
         }
 
-        ranges.Add(start == end ? start.ToString() : $"{start}-{end}");
-        return string.Join(", ", ranges);
+        AppendRange(sb, start, end);
+        return sb.ToString();
+
+        static void AppendRange(StringBuilder builder, int rangeStart, int rangeEnd)
+        {
+            if (builder.Length > 0)
+            {
+                builder.Append(", ");
+            }
+
+            builder.Append(rangeStart);
+            if (rangeStart != rangeEnd)
+            {
+                builder.Append('-').Append(rangeEnd);
+            }
+        }
     }
 }

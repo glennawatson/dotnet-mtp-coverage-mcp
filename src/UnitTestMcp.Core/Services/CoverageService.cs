@@ -12,6 +12,12 @@ namespace UnitTestMcp.Core.Services;
 /// </summary>
 public sealed class CoverageService : ICoverageService
 {
+    /// <summary>
+    /// Comparer for binary search insertion of <see cref="LineCoverage"/> by line number.
+    /// </summary>
+    private static readonly IComparer<LineCoverage> LineNumberComparer =
+        Comparer<LineCoverage>.Create((a, b) => a.LineNumber.CompareTo(b.LineNumber));
+
     /// <inheritdoc/>
     public Task<CoverageReport> LoadReportAsync(string filePath, CancellationToken cancellationToken = default) =>
         CoberturaParser.ParseFileAsync(filePath, cancellationToken);
@@ -28,10 +34,12 @@ public sealed class CoverageService : ICoverageService
             throw new DirectoryNotFoundException($"Solution directory not found: {directory}");
         }
 
-        var coberturaFiles = Directory.EnumerateFiles(directory, "*.cobertura.xml", SearchOption.AllDirectories)
-            .Concat(Directory.EnumerateFiles(directory, "coverage.cobertura.xml", SearchOption.AllDirectories))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        List<string> coberturaFiles =
+        [
+            .. Directory.EnumerateFiles(directory, "*.cobertura.xml", SearchOption.AllDirectories)
+                .Concat(Directory.EnumerateFiles(directory, "coverage.cobertura.xml", SearchOption.AllDirectories))
+                .Distinct(StringComparer.OrdinalIgnoreCase),
+        ];
 
         if (coberturaFiles.Count == 0)
         {
@@ -52,26 +60,15 @@ public sealed class CoverageService : ICoverageService
 
         var normalizedPath = NormalizePath(filePath);
 
-        var matchingClasses = report.AllClasses
-            .Where(c => NormalizePath(c.FileName).EndsWith(normalizedPath, StringComparison.OrdinalIgnoreCase)
-                        || NormalizePath(c.FileName).Equals(normalizedPath, StringComparison.OrdinalIgnoreCase))
-            .ToList();
+        List<ClassCoverage> matchingClasses =
+        [
+            .. report.AllClasses
+                .Where(c => NormalizePath(c.FileName).EndsWith(normalizedPath, StringComparison.OrdinalIgnoreCase)),
+        ];
 
-        var allLines = matchingClasses
-            .SelectMany(c => c.Lines)
-            .DistinctBy(l => l.LineNumber)
-            .OrderBy(l => l.LineNumber)
-            .ToList();
+        var allLines = MergeSortedLines(matchingClasses);
 
-        var missedLines = allLines
-            .Where(l => l.Status is LineVisitStatus.NotCovered)
-            .ToList();
-
-        var partialBranches = allLines
-            .Where(l => l.Status is LineVisitStatus.PartiallyCovered)
-            .ToList();
-
-        return new FileMissedCoverage(filePath, missedLines, partialBranches);
+        return CategorizeLines(filePath, allLines);
     }
 
     /// <inheritdoc/>
@@ -113,24 +110,18 @@ public sealed class CoverageService : ICoverageService
     {
         ArgumentNullException.ThrowIfNull(report);
 
-        var fileGroups = report.AllClasses
-            .GroupBy(c => c.FileName, StringComparer.OrdinalIgnoreCase)
-            .Select(g =>
-            {
-                var allLines = g
-                    .SelectMany(c => c.Lines)
-                    .DistinctBy(l => l.LineNumber)
-                    .OrderBy(l => l.LineNumber)
-                    .ToList();
-
-                var missedLines = allLines.Where(l => l.Status is LineVisitStatus.NotCovered).ToList();
-                var partialBranches = allLines.Where(l => l.Status is LineVisitStatus.PartiallyCovered).ToList();
-
-                return new FileMissedCoverage(g.Key, missedLines, partialBranches);
-            })
-            .Where(f => f.MissedLines.Count > 0 || f.PartiallyMissedBranches.Count > 0)
-            .OrderBy(f => f.FilePath, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        List<FileMissedCoverage> fileGroups =
+        [
+            .. report.AllClasses
+                .GroupBy(c => c.FileName, StringComparer.OrdinalIgnoreCase)
+                .Select(g =>
+                {
+                    var allLines = MergeSortedLines(g);
+                    return CategorizeLines(g.Key, allLines);
+                })
+                .Where(f => f.MissedLines.Count > 0 || f.PartiallyMissedBranches.Count > 0)
+                .OrderBy(f => f.FilePath, StringComparer.OrdinalIgnoreCase),
+        ];
 
         return new SolutionMissedCoverage(
             report.CoveredLineCount,
@@ -141,29 +132,86 @@ public sealed class CoverageService : ICoverageService
     }
 
     /// <summary>
+    /// Merges line coverage entries from multiple classes into a single sorted, deduplicated list.
+    /// Uses binary search insertion to maintain sort order, avoiding a post-sort pass.
+    /// Each class's lines are already sorted by line number from parsing.
+    /// </summary>
+    /// <param name="classes">The classes whose lines should be merged.</param>
+    /// <returns>A sorted, deduplicated list of line coverage entries.</returns>
+    private static List<LineCoverage> MergeSortedLines(IEnumerable<ClassCoverage> classes)
+    {
+        var result = new List<LineCoverage>();
+
+        foreach (var cls in classes)
+        {
+            foreach (var line in cls.Lines)
+            {
+                var index = result.BinarySearch(line, LineNumberComparer);
+                if (index < 0)
+                {
+                    result.Insert(~index, line);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Categorizes a sorted list of lines into missed and partially covered in a single pass.
+    /// </summary>
+    /// <param name="filePath">The source file path for the result.</param>
+    /// <param name="sortedLines">The sorted, deduplicated line coverage entries.</param>
+    /// <returns>A <see cref="FileMissedCoverage"/> with categorized lines.</returns>
+    private static FileMissedCoverage CategorizeLines(string filePath, List<LineCoverage> sortedLines)
+    {
+        var missedLines = new List<LineCoverage>(sortedLines.Count);
+        var partialBranches = new List<LineCoverage>(sortedLines.Count);
+
+        foreach (var line in sortedLines)
+        {
+            if (line.Status is LineVisitStatus.NotCovered)
+            {
+                missedLines.Add(line);
+            }
+            else if (line.Status is LineVisitStatus.PartiallyCovered)
+            {
+                partialBranches.Add(line);
+            }
+        }
+
+        return new FileMissedCoverage(filePath, missedLines, partialBranches);
+    }
+
+    /// <summary>
     /// Merges multiple coverage reports into a single combined report.
     /// </summary>
     /// <param name="reports">The reports to merge.</param>
     /// <returns>A single merged <see cref="CoverageReport"/>.</returns>
     private static CoverageReport MergeReports(IReadOnlyList<CoverageReport> reports)
     {
-        var allPackages = reports
-            .SelectMany(r => r.Packages)
-            .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(g =>
-            {
-                var mergedClasses = g
-                    .SelectMany(p => p.Classes)
-                    .GroupBy(c => (Name: c.Name, FileName: c.FileName), StringComparerExtensions.CreateTupleComparer(StringComparer.OrdinalIgnoreCase))
-                    .Select(cg => cg.First())
-                    .ToList();
+        List<PackageCoverage> allPackages =
+        [
+            .. reports
+                .SelectMany(r => r.Packages)
+                .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(g =>
+                {
+                    List<ClassCoverage> mergedClasses =
+                    [
+                        .. g.SelectMany(p => p.Classes)
+                            .GroupBy(
+                                c => (Name: c.Name, FileName: c.FileName),
+                                StringComparerExtensions.CreateTupleComparer(StringComparer.OrdinalIgnoreCase))
+                            .Select(cg => cg.First()),
+                    ];
 
-                var first = g.First();
-                return new PackageCoverage(first.Name, first.LineCoverageRate, first.BranchCoverageRate, first.Complexity, mergedClasses);
-            })
-            .ToList();
+                    var first = g.First();
+                    return new PackageCoverage(first.Name, first.LineCoverageRate, first.BranchCoverageRate, first.Complexity, mergedClasses);
+                }),
+        ];
 
-        var allSources = reports.SelectMany(r => r.SourceDirectories).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        List<string> allSources = [.. reports.SelectMany(r => r.SourceDirectories).Distinct(StringComparer.OrdinalIgnoreCase)];
         var latestTimestamp = reports.Where(r => r.Timestamp.HasValue).Select(r => r.Timestamp!.Value).DefaultIfEmpty().Max();
 
         return new CoverageReport(allPackages, allSources, latestTimestamp == default ? null : latestTimestamp);

@@ -28,6 +28,12 @@ namespace UnitTestMcp.Core.Parsers;
 public static partial class CoberturaParser
 {
     /// <summary>
+    /// Comparer for binary search insertion of <see cref="LineCoverage"/> by line number.
+    /// </summary>
+    private static readonly IComparer<LineCoverage> LineNumberComparer =
+        Comparer<LineCoverage>.Create((a, b) => a.LineNumber.CompareTo(b.LineNumber));
+
+    /// <summary>
     /// Parses a Cobertura XML file from the given path.
     /// </summary>
     /// <param name="filePath">The path to the Cobertura XML file.</param>
@@ -67,19 +73,15 @@ public static partial class CoberturaParser
 
         var root = document.Root ?? throw new InvalidOperationException("XML document has no root element.");
 
-        var sourceDirectories = root
-            .Element("sources")?
-            .Elements("source")
-            .Select(e => e.Value)
-            .ToList() ?? [];
+        List<string> sourceDirectories = root.Element("sources") is { } sourcesEl
+            ? [.. sourcesEl.Elements("source").Select(e => e.Value)]
+            : [];
 
         var timestamp = ParseTimestamp(root.Attribute("timestamp")?.Value);
 
-        var packages = root
-            .Element("packages")?
-            .Elements("package")
-            .Select(ParsePackage)
-            .ToList() ?? [];
+        List<PackageCoverage> packages = root.Element("packages") is { } packagesEl
+            ? [.. packagesEl.Elements("package").Select(ParsePackage)]
+            : [];
 
         return new CoverageReport(packages, sourceDirectories, timestamp);
     }
@@ -103,11 +105,9 @@ public static partial class CoberturaParser
         var branchRate = ParseDecimalAttribute(packageElement, "branch-rate");
         var complexity = ParseDecimalAttribute(packageElement, "complexity");
 
-        var classes = packageElement
-            .Element("classes")?
-            .Elements("class")
-            .Select(ParseClass)
-            .ToList() ?? [];
+        List<ClassCoverage> classes = packageElement.Element("classes") is { } classesEl
+            ? [.. classesEl.Elements("class").Select(ParseClass)]
+            : [];
 
         return new PackageCoverage(name, lineRate, branchRate, complexity, classes);
     }
@@ -127,11 +127,9 @@ public static partial class CoberturaParser
 
         var classLines = ParseLines(classElement.Element("lines"));
 
-        var methods = classElement
-            .Element("methods")?
-            .Elements("method")
-            .Select(m => ParseMethod(m, classLines))
-            .ToList() ?? [];
+        List<MethodCoverage> methods = classElement.Element("methods") is { } methodsEl
+            ? [.. methodsEl.Elements("method").Select(m => ParseMethod(m, classLines))]
+            : [];
 
         return new ClassCoverage(name, fileName, lineRate, branchRate, complexity, methods, classLines);
     }
@@ -155,7 +153,7 @@ public static partial class CoberturaParser
         // If method has no lines of its own, try to correlate from class lines
         if (methodLines.Count == 0 && classLines.Count > 0)
         {
-            methodLines = classLines.ToList();
+            methodLines = [.. classLines];
         }
 
         return new MethodCoverage(name, signature, lineRate, branchRate, complexity, methodLines);
@@ -173,11 +171,19 @@ public static partial class CoberturaParser
             return [];
         }
 
-        return linesElement
-            .Elements("line")
-            .Select(ParseLine)
-            .OrderBy(l => l.LineNumber)
-            .ToList();
+        var lines = new List<LineCoverage>();
+
+        foreach (var element in linesElement.Elements("line"))
+        {
+            var line = ParseLine(element);
+            var index = lines.BinarySearch(line, LineNumberComparer);
+            if (index < 0)
+            {
+                lines.Insert(~index, line);
+            }
+        }
+
+        return lines;
     }
 
     /// <summary>
@@ -187,8 +193,10 @@ public static partial class CoberturaParser
     /// <returns>The parsed line coverage data.</returns>
     private static LineCoverage ParseLine(XElement lineElement)
     {
-        var number = int.Parse(lineElement.Attribute("number")?.Value ?? "0", CultureInfo.InvariantCulture);
-        var hits = int.Parse(lineElement.Attribute("hits")?.Value ?? "0", CultureInfo.InvariantCulture);
+        var numberAttr = lineElement.Attribute("number")?.Value;
+        var number = numberAttr is not null ? int.Parse(numberAttr, CultureInfo.InvariantCulture) : 0;
+        var hitsAttr = lineElement.Attribute("hits")?.Value;
+        var hits = hitsAttr is not null ? int.Parse(hitsAttr, CultureInfo.InvariantCulture) : 0;
         var isBranch = string.Equals(lineElement.Attribute("branch")?.Value, "true", StringComparison.OrdinalIgnoreCase);
 
         int? coveredBranches = null;
@@ -228,7 +236,7 @@ public static partial class CoberturaParser
             return LineVisitStatus.NotCovered;
         }
 
-        if (isBranch && coveredBranches.HasValue && totalBranches.HasValue && coveredBranches.Value < totalBranches.Value)
+        if (isBranch && coveredBranches is { } cb && totalBranches is { } tb && cb < tb)
         {
             return LineVisitStatus.PartiallyCovered;
         }
@@ -251,7 +259,10 @@ public static partial class CoberturaParser
         }
 
         // Handle locale-independent parsing (Cobertura may use comma or period)
-        value = value.Replace(',', '.');
+        if (value.Contains(','))
+        {
+            value = value.Replace(',', '.');
+        }
 
         return decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result)
             ? Math.Round(result, 4, MidpointRounding.AwayFromZero)

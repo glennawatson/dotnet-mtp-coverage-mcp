@@ -24,32 +24,62 @@ public sealed record PackageCoverage(
     IReadOnlyList<ClassCoverage> Classes)
 {
     /// <summary>
+    /// Pre-computed aggregate line and branch coverage counts from all classes, calculated once at construction time.
+    /// </summary>
+    private readonly (int CoveredLines, int CoverableLines, int MissedLines, int TotalBranches, int CoveredBranches) _counts = ComputeCounts(Classes);
+
+    /// <summary>
     /// Gets the total covered line count across all classes.
     /// </summary>
-    public int CoveredLineCount => Classes.Sum(c => c.CoveredLineCount);
+    public int CoveredLineCount => _counts.CoveredLines;
 
     /// <summary>
     /// Gets the total coverable line count across all classes.
     /// </summary>
-    public int CoverableLineCount => Classes.Sum(c => c.CoverableLineCount);
+    public int CoverableLineCount => _counts.CoverableLines;
 
     /// <summary>
     /// Gets the total missed line count across all classes.
     /// </summary>
-    public int MissedLineCount => Classes.Sum(c => c.MissedLineCount);
+    public int MissedLineCount => _counts.MissedLines;
 
     /// <summary>
     /// Gets the total branch count across all classes.
     /// </summary>
-    public int TotalBranchCount => Classes.Sum(c => c.TotalBranchCount);
+    public int TotalBranchCount => _counts.TotalBranches;
 
     /// <summary>
     /// Gets the covered branch count across all classes.
     /// </summary>
-    public int CoveredBranchCount => Classes.Sum(c => c.CoveredBranchCount);
+    public int CoveredBranchCount => _counts.CoveredBranches;
 
     /// <summary>
     /// Gets the missed branch count across all classes.
     /// </summary>
-    public int MissedBranchCount => Classes.Sum(c => c.MissedBranchCount);
+    public int MissedBranchCount => _counts.TotalBranches - _counts.CoveredBranches;
+
+    /// <summary>
+    /// Aggregates pre-computed line and branch counts from all classes in a single pass.
+    /// </summary>
+    /// <param name="classes">The class coverage entries to aggregate.</param>
+    /// <returns>A tuple containing the aggregated coverage counts.</returns>
+    private static (int CoveredLines, int CoverableLines, int MissedLines, int TotalBranches, int CoveredBranches) ComputeCounts(IReadOnlyList<ClassCoverage> classes)
+    {
+        var coveredLines = 0;
+        var coverableLines = 0;
+        var missedLines = 0;
+        var totalBranches = 0;
+        var coveredBranches = 0;
+
+        foreach (var c in classes)
+        {
+            coveredLines += c.CoveredLineCount;
+            coverableLines += c.CoverableLineCount;
+            missedLines += c.MissedLineCount;
+            totalBranches += c.TotalBranchCount;
+            coveredBranches += c.CoveredBranchCount;
+        }
+
+        return (coveredLines, coverableLines, missedLines, totalBranches, coveredBranches);
+    }
 }
