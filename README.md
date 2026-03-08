@@ -67,14 +67,50 @@ dotnet test
 
 ### Configuring as an MCP Server
 
-Add to your Claude Code MCP configuration (`~/.claude/claude_desktop_config.json`):
+The following examples are for end users consuming the published global tool. You do not need to build the project from source to use these configurations.
+
+#### Claude Code CLI
+
+Add the installed tool as a stdio MCP server with:
+
+```bash
+claude mcp add dotnet-mtp-coverage-mcp -- dotnet-mtp-coverage-mcp
+```
+
+If your local setup needs environment variables, Claude Code also supports:
+
+```bash
+claude mcp add -e SOME_SETTING=value dotnet-mtp-coverage-mcp -- dotnet-mtp-coverage-mcp
+```
+
+No additional subprocess flags or arguments are required when using the installed global tool.
+
+#### JSON Configuration
+
+For JSON-based MCP clients (for example, Claude Desktop or other clients that use an `mcpServers` object), use one of the following stdio server configurations.
+
+Installed .NET tool:
+
+```json
+{
+  "mcpServers": {
+    "dotnet-mtp-coverage-mcp": {
+      "command": "dotnet-mtp-coverage-mcp"
+    }
+  }
+}
+```
+
+With environment variables:
 
 ```json
 {
   "mcpServers": {
     "dotnet-mtp-coverage-mcp": {
       "command": "dotnet-mtp-coverage-mcp",
-      "args": []
+      "env": {
+        "SOME_SETTING": "value"
+      }
     }
   }
 }
