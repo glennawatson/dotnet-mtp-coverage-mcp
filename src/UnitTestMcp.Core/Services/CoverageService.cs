@@ -15,7 +15,7 @@ public sealed class CoverageService : ICoverageService
     /// <summary>
     /// Comparer for binary search insertion of <see cref="LineCoverage"/> by line number.
     /// </summary>
-    private static readonly IComparer<LineCoverage> LineNumberComparer =
+    internal static readonly IComparer<LineCoverage> LineNumberComparer =
         Comparer<LineCoverage>.Create((a, b) => a.LineNumber.CompareTo(b.LineNumber));
 
     /// <inheritdoc/>
@@ -138,7 +138,7 @@ public sealed class CoverageService : ICoverageService
     /// </summary>
     /// <param name="classes">The classes whose lines should be merged.</param>
     /// <returns>A sorted, deduplicated list of line coverage entries.</returns>
-    private static List<LineCoverage> MergeSortedLines(IEnumerable<ClassCoverage> classes)
+    internal static List<LineCoverage> MergeSortedLines(IEnumerable<ClassCoverage> classes)
     {
         var result = new List<LineCoverage>();
 
@@ -163,7 +163,7 @@ public sealed class CoverageService : ICoverageService
     /// <param name="filePath">The source file path for the result.</param>
     /// <param name="sortedLines">The sorted, deduplicated line coverage entries.</param>
     /// <returns>A <see cref="FileMissedCoverage"/> with categorized lines.</returns>
-    private static FileMissedCoverage CategorizeLines(string filePath, List<LineCoverage> sortedLines)
+    internal static FileMissedCoverage CategorizeLines(string filePath, List<LineCoverage> sortedLines)
     {
         var missedLines = new List<LineCoverage>(sortedLines.Count);
         var partialBranches = new List<LineCoverage>(sortedLines.Count);
@@ -185,36 +185,204 @@ public sealed class CoverageService : ICoverageService
 
     /// <summary>
     /// Merges multiple coverage reports into a single combined report.
+    /// When the same class appears in multiple reports, line coverage data is merged
+    /// by taking the maximum hits and best branch coverage for each line.
     /// </summary>
     /// <param name="reports">The reports to merge.</param>
     /// <returns>A single merged <see cref="CoverageReport"/>.</returns>
-    private static CoverageReport MergeReports(IReadOnlyList<CoverageReport> reports)
+    internal static CoverageReport MergeReports(IReadOnlyList<CoverageReport> reports)
     {
-        List<PackageCoverage> allPackages =
-        [
-            .. reports
-                .SelectMany(r => r.Packages)
-                .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(g =>
+        // Group packages by name across all reports
+        var packageMap = new Dictionary<string, List<PackageCoverage>>(StringComparer.OrdinalIgnoreCase);
+        var totalPackageCount = 0;
+        foreach (var report in reports)
+        {
+            foreach (var package in report.Packages)
+            {
+                if (!packageMap.TryGetValue(package.Name, out var list))
                 {
-                    List<ClassCoverage> mergedClasses =
-                    [
-                        .. g.SelectMany(p => p.Classes)
-                            .GroupBy(
-                                c => (Name: c.Name, FileName: c.FileName),
-                                StringComparerExtensions.CreateTupleComparer(StringComparer.OrdinalIgnoreCase))
-                            .Select(cg => cg.First()),
-                    ];
+                    list = new List<PackageCoverage>(reports.Count);
+                    packageMap[package.Name] = list;
+                }
 
-                    var first = g.First();
-                    return new PackageCoverage(first.Name, first.LineCoverageRate, first.BranchCoverageRate, first.Complexity, mergedClasses);
-                }),
-        ];
+                list.Add(package);
+                totalPackageCount++;
+            }
+        }
 
-        List<string> allSources = [.. reports.SelectMany(r => r.SourceDirectories).Distinct(StringComparer.OrdinalIgnoreCase)];
-        var latestTimestamp = reports.Where(r => r.Timestamp.HasValue).Select(r => r.Timestamp!.Value).DefaultIfEmpty().Max();
+        var allPackages = new List<PackageCoverage>(packageMap.Count);
+        var classComparer = StringComparerExtensions.CreateTupleComparer(StringComparer.OrdinalIgnoreCase);
 
-        return new CoverageReport(allPackages, allSources, latestTimestamp == default ? null : latestTimestamp);
+        foreach (var (packageName, packageGroup) in packageMap)
+        {
+            // Group classes by (Name, FileName) across all package instances
+            var classMap = new Dictionary<(string Name, string FileName), List<ClassCoverage>>(classComparer);
+            var classCount = 0;
+            foreach (var pkg in packageGroup)
+            {
+                foreach (var cls in pkg.Classes)
+                {
+                    var key = (cls.Name, cls.FileName);
+                    if (!classMap.TryGetValue(key, out var classList))
+                    {
+                        classList = new List<ClassCoverage>(packageGroup.Count);
+                        classMap[key] = classList;
+                    }
+
+                    classList.Add(cls);
+                    classCount++;
+                }
+            }
+
+            // Merge each class group
+            var mergedClasses = new List<ClassCoverage>(classMap.Count);
+            foreach (var (_, classGroup) in classMap)
+            {
+                mergedClasses.Add(MergeClassCoverage(classGroup));
+            }
+
+            // Rates are recomputed from merged line data by PackageCoverage.ComputeCounts
+            allPackages.Add(new PackageCoverage(packageName, null, null, null, mergedClasses));
+        }
+
+        // Collect distinct source directories
+        var sourceSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var report in reports)
+        {
+            foreach (var source in report.SourceDirectories)
+            {
+                sourceSet.Add(source);
+            }
+        }
+
+        var allSources = new List<string>(sourceSet);
+
+        // Find latest timestamp
+        DateTimeOffset? latestTimestamp = null;
+        foreach (var report in reports)
+        {
+            if (report.Timestamp.HasValue
+                && (!latestTimestamp.HasValue || report.Timestamp.Value > latestTimestamp.Value))
+            {
+                latestTimestamp = report.Timestamp.Value;
+            }
+        }
+
+        return new CoverageReport(allPackages, allSources, latestTimestamp);
+    }
+
+    /// <summary>
+    /// Merges multiple <see cref="ClassCoverage"/> instances for the same class into one.
+    /// Line coverage is merged by taking the maximum hits and best branch coverage for each line number.
+    /// Uses binary search insertion to maintain sorted line order.
+    /// </summary>
+    /// <param name="classGroup">The class coverage instances to merge (all same Name/FileName).</param>
+    /// <returns>A single merged <see cref="ClassCoverage"/>.</returns>
+    internal static ClassCoverage MergeClassCoverage(List<ClassCoverage> classGroup)
+    {
+        if (classGroup.Count == 1)
+        {
+            return classGroup[0];
+        }
+
+        var first = classGroup[0];
+
+        // Count total lines across all instances for pre-allocation
+        var totalLines = 0;
+        foreach (var cls in classGroup)
+        {
+            totalLines += cls.Lines.Count;
+        }
+
+        // Merge lines: binary search sorted list, merge hits on collision
+        var mergedLines = new List<LineCoverage>(first.Lines.Count);
+        foreach (var cls in classGroup)
+        {
+            foreach (var line in cls.Lines)
+            {
+                var index = mergedLines.BinarySearch(line, LineNumberComparer);
+                if (index < 0)
+                {
+                    mergedLines.Insert(~index, line);
+                }
+                else
+                {
+                    // Same line number exists — merge by taking best coverage
+                    mergedLines[index] = MergeLineCoverage(mergedLines[index], line);
+                }
+            }
+        }
+
+        // Merge methods: keep first occurrence by (Name, Signature)
+        var totalMethods = 0;
+        foreach (var cls in classGroup)
+        {
+            totalMethods += cls.Methods.Count;
+        }
+
+        var seenMethods = new HashSet<(string, string)>(totalMethods);
+        var mergedMethods = new List<MethodCoverage>(first.Methods.Count);
+        foreach (var cls in classGroup)
+        {
+            foreach (var method in cls.Methods)
+            {
+                if (seenMethods.Add((method.Name, method.Signature)))
+                {
+                    mergedMethods.Add(method);
+                }
+            }
+        }
+
+        // Rates are recomputed from merged line data by ClassCoverage.ComputeCounts
+        return new ClassCoverage(first.Name, first.FileName, null, null, null, mergedMethods, mergedLines);
+    }
+
+    /// <summary>
+    /// Merges two <see cref="LineCoverage"/> entries for the same line number,
+    /// taking the maximum hits and best branch coverage.
+    /// </summary>
+    /// <param name="a">The first line coverage entry.</param>
+    /// <param name="b">The second line coverage entry.</param>
+    /// <returns>A merged line coverage entry with the best coverage data.</returns>
+    internal static LineCoverage MergeLineCoverage(LineCoverage a, LineCoverage b)
+    {
+        var hits = Math.Max(a.Hits, b.Hits);
+        var isBranch = a.IsBranch || b.IsBranch;
+
+        int? coveredBranches = null;
+        int? totalBranches = null;
+
+        if (isBranch)
+        {
+            coveredBranches = Math.Max(a.CoveredBranches ?? 0, b.CoveredBranches ?? 0);
+            totalBranches = a.TotalBranches ?? b.TotalBranches;
+        }
+
+        var status = DetermineMergedLineStatus(hits, isBranch, coveredBranches, totalBranches);
+        return new LineCoverage(a.LineNumber, hits, status, isBranch, coveredBranches, totalBranches);
+    }
+
+    /// <summary>
+    /// Determines the visit status for a merged line based on its hits and branch information.
+    /// </summary>
+    /// <param name="hits">The number of times the line was executed.</param>
+    /// <param name="isBranch">Whether the line contains a branch point.</param>
+    /// <param name="coveredBranches">The number of branches covered, if applicable.</param>
+    /// <param name="totalBranches">The total number of branches, if applicable.</param>
+    /// <returns>The determined <see cref="LineVisitStatus"/>.</returns>
+    internal static LineVisitStatus DetermineMergedLineStatus(int hits, bool isBranch, int? coveredBranches, int? totalBranches)
+    {
+        if (hits <= 0)
+        {
+            return LineVisitStatus.NotCovered;
+        }
+
+        if (isBranch && coveredBranches is { } cb && totalBranches is { } tb && cb < tb)
+        {
+            return LineVisitStatus.PartiallyCovered;
+        }
+
+        return LineVisitStatus.Covered;
     }
 
     /// <summary>
@@ -222,6 +390,6 @@ public sealed class CoverageService : ICoverageService
     /// </summary>
     /// <param name="path">The path to normalize.</param>
     /// <returns>The normalized path with forward slashes.</returns>
-    private static string NormalizePath(string path) =>
+    internal static string NormalizePath(string path) =>
         path.Replace('\\', '/');
 }

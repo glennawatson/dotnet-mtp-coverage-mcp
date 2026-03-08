@@ -30,7 +30,7 @@ public static partial class CoberturaParser
     /// <summary>
     /// Comparer for binary search insertion of <see cref="LineCoverage"/> by line number.
     /// </summary>
-    private static readonly IComparer<LineCoverage> LineNumberComparer =
+    internal static readonly IComparer<LineCoverage> LineNumberComparer =
         Comparer<LineCoverage>.Create((a, b) => a.LineNumber.CompareTo(b.LineNumber));
 
     /// <summary>
@@ -91,14 +91,14 @@ public static partial class CoberturaParser
     /// </summary>
     /// <returns>A regex matching the (covered/total) pattern in condition-coverage attributes.</returns>
     [GeneratedRegex(@"\((?<covered>\d+)/(?<total>\d+)\)$")]
-    private static partial Regex BranchCoverageRegex();
+    internal static partial Regex BranchCoverageRegex();
 
     /// <summary>
     /// Parses a package element into a <see cref="PackageCoverage"/>.
     /// </summary>
     /// <param name="packageElement">The XML element representing a package.</param>
     /// <returns>The parsed package coverage data.</returns>
-    private static PackageCoverage ParsePackage(XElement packageElement)
+    internal static PackageCoverage ParsePackage(XElement packageElement)
     {
         var name = packageElement.Attribute("name")?.Value ?? string.Empty;
         var lineRate = ParseDecimalAttribute(packageElement, "line-rate");
@@ -117,7 +117,7 @@ public static partial class CoberturaParser
     /// </summary>
     /// <param name="classElement">The XML element representing a class.</param>
     /// <returns>The parsed class coverage data.</returns>
-    private static ClassCoverage ParseClass(XElement classElement)
+    internal static ClassCoverage ParseClass(XElement classElement)
     {
         var name = classElement.Attribute("name")?.Value ?? string.Empty;
         var fileName = classElement.Attribute("filename")?.Value ?? string.Empty;
@@ -140,7 +140,7 @@ public static partial class CoberturaParser
     /// <param name="methodElement">The XML element representing a method.</param>
     /// <param name="classLines">The class-level lines to fall back on if the method has none.</param>
     /// <returns>The parsed method coverage data.</returns>
-    private static MethodCoverage ParseMethod(XElement methodElement, IReadOnlyList<LineCoverage> classLines)
+    internal static MethodCoverage ParseMethod(XElement methodElement, IReadOnlyList<LineCoverage> classLines)
     {
         var name = methodElement.Attribute("name")?.Value ?? string.Empty;
         var signature = methodElement.Attribute("signature")?.Value ?? string.Empty;
@@ -164,7 +164,7 @@ public static partial class CoberturaParser
     /// </summary>
     /// <param name="linesElement">The XML element containing line children, or null.</param>
     /// <returns>A list of parsed line coverage entries, ordered by line number.</returns>
-    private static List<LineCoverage> ParseLines(XElement? linesElement)
+    internal static List<LineCoverage> ParseLines(XElement? linesElement)
     {
         if (linesElement is null)
         {
@@ -191,7 +191,7 @@ public static partial class CoberturaParser
     /// </summary>
     /// <param name="lineElement">The XML element representing a single line.</param>
     /// <returns>The parsed line coverage data.</returns>
-    private static LineCoverage ParseLine(XElement lineElement)
+    internal static LineCoverage ParseLine(XElement lineElement)
     {
         var numberAttr = lineElement.Attribute("number")?.Value;
         var number = numberAttr is not null ? int.Parse(numberAttr, CultureInfo.InvariantCulture) : 0;
@@ -229,7 +229,7 @@ public static partial class CoberturaParser
     /// <param name="coveredBranches">The number of branches covered, if applicable.</param>
     /// <param name="totalBranches">The total number of branches, if applicable.</param>
     /// <returns>The determined <see cref="LineVisitStatus"/>.</returns>
-    private static LineVisitStatus DetermineLineStatus(int hits, bool isBranch, int? coveredBranches, int? totalBranches)
+    internal static LineVisitStatus DetermineLineStatus(int hits, bool isBranch, int? coveredBranches, int? totalBranches)
     {
         if (hits <= 0)
         {
@@ -250,7 +250,7 @@ public static partial class CoberturaParser
     /// <param name="element">The XML element containing the attribute.</param>
     /// <param name="attributeName">The name of the attribute to parse.</param>
     /// <returns>The parsed decimal value, or null if the attribute is missing, NaN, or unparseable.</returns>
-    private static decimal? ParseDecimalAttribute(XElement element, string attributeName)
+    internal static decimal? ParseDecimalAttribute(XElement element, string attributeName)
     {
         var value = element.Attribute(attributeName)?.Value;
         if (value is null or "NaN")
@@ -274,7 +274,7 @@ public static partial class CoberturaParser
     /// </summary>
     /// <param name="value">The timestamp attribute value, or null.</param>
     /// <returns>The parsed <see cref="DateTimeOffset"/>, or null if the value is missing or unparseable.</returns>
-    private static DateTimeOffset? ParseTimestamp(string? value)
+    internal static DateTimeOffset? ParseTimestamp(string? value)
     {
         if (value is null)
         {

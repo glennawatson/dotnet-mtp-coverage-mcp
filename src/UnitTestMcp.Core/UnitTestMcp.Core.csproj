@@ -4,4 +4,8 @@
     <IsPackable>true</IsPackable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="UnitTestMcp.Tests" />
+  </ItemGroup>
+
 </Project>

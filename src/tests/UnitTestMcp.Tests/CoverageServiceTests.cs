@@ -213,4 +213,253 @@ public class CoverageServiceTests
         await Assert.That(report.LineCoverageRate!.Value).IsGreaterThan(0m);
         await Assert.That(report.LineCoverageRate!.Value).IsLessThanOrEqualTo(1m);
     }
+
+    /// <summary>
+    /// Verifies that merging two reports for the same class takes the maximum hits per line,
+    /// so a line covered by one test project is not overwritten by zero hits from another.
+    /// </summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Test]
+    public async Task MergeReports_SameClass_TakesMaxHitsPerLine()
+    {
+        // Report A: lines 10 covered, 11 missed, 12 covered
+        var reportA = CoberturaParser.ParseString(
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <coverage version="1" timestamp="1700000000" line-rate="0.67" branch-rate="1">
+              <sources><source>/src</source></sources>
+              <packages>
+                <package name="Lib" line-rate="0.67" branch-rate="1" complexity="1">
+                  <classes>
+                    <class name="Lib.Foo" filename="/src/Foo.cs" line-rate="0.67" branch-rate="1" complexity="1">
+                      <methods />
+                      <lines>
+                        <line number="10" hits="5" branch="false" />
+                        <line number="11" hits="0" branch="false" />
+                        <line number="12" hits="3" branch="false" />
+                      </lines>
+                    </class>
+                  </classes>
+                </package>
+              </packages>
+            </coverage>
+            """);
+
+        // Report B: lines 10 missed, 11 covered, 12 missed
+        var reportB = CoberturaParser.ParseString(
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <coverage version="1" timestamp="1700000001" line-rate="0.33" branch-rate="1">
+              <sources><source>/src</source></sources>
+              <packages>
+                <package name="Lib" line-rate="0.33" branch-rate="1" complexity="1">
+                  <classes>
+                    <class name="Lib.Foo" filename="/src/Foo.cs" line-rate="0.33" branch-rate="1" complexity="1">
+                      <methods />
+                      <lines>
+                        <line number="10" hits="0" branch="false" />
+                        <line number="11" hits="7" branch="false" />
+                        <line number="12" hits="0" branch="false" />
+                      </lines>
+                    </class>
+                  </classes>
+                </package>
+              </packages>
+            </coverage>
+            """);
+
+        var merged = CoverageService.MergeReports([reportA, reportB]);
+
+        // All 3 lines should be covered after merge
+        await Assert.That(merged.CoverableLineCount).IsEqualTo(3);
+        await Assert.That(merged.CoveredLineCount).IsEqualTo(3);
+        await Assert.That(merged.MissedLineCount).IsEqualTo(0);
+
+        // Verify the package was merged into one
+        await Assert.That(merged.Packages).Count().IsEqualTo(1);
+        await Assert.That(merged.Packages[0].Name).IsEqualTo("Lib");
+        await Assert.That(merged.Packages[0].Classes).Count().IsEqualTo(1);
+
+        // Verify individual line hits took the max
+        var cls = merged.Packages[0].Classes[0];
+        await Assert.That(cls.Lines).Count().IsEqualTo(3);
+        await Assert.That(cls.Lines[0].Hits).IsEqualTo(5);  // max(5, 0)
+        await Assert.That(cls.Lines[1].Hits).IsEqualTo(7);  // max(0, 7)
+        await Assert.That(cls.Lines[2].Hits).IsEqualTo(3);  // max(3, 0)
+    }
+
+    /// <summary>
+    /// Verifies that merging two reports takes the best branch coverage for each line.
+    /// </summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Test]
+    public async Task MergeReports_SameClass_TakesBestBranchCoverage()
+    {
+        // Report A: branch line with 1/2 branches covered
+        var reportA = CoberturaParser.ParseString(
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <coverage version="1" timestamp="1700000000" line-rate="1" branch-rate="0.5">
+              <sources><source>/src</source></sources>
+              <packages>
+                <package name="Lib" line-rate="1" branch-rate="0.5" complexity="1">
+                  <classes>
+                    <class name="Lib.Bar" filename="/src/Bar.cs" line-rate="1" branch-rate="0.5" complexity="1">
+                      <methods />
+                      <lines>
+                        <line number="5" hits="3" branch="true" condition-coverage="50% (1/2)" />
+                      </lines>
+                    </class>
+                  </classes>
+                </package>
+              </packages>
+            </coverage>
+            """);
+
+        // Report B: same branch line but with 2/2 branches covered
+        var reportB = CoberturaParser.ParseString(
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <coverage version="1" timestamp="1700000001" line-rate="1" branch-rate="1">
+              <sources><source>/src</source></sources>
+              <packages>
+                <package name="Lib" line-rate="1" branch-rate="1" complexity="1">
+                  <classes>
+                    <class name="Lib.Bar" filename="/src/Bar.cs" line-rate="1" branch-rate="1" complexity="1">
+                      <methods />
+                      <lines>
+                        <line number="5" hits="2" branch="true" condition-coverage="100% (2/2)" />
+                      </lines>
+                    </class>
+                  </classes>
+                </package>
+              </packages>
+            </coverage>
+            """);
+
+        var merged = CoverageService.MergeReports([reportA, reportB]);
+
+        var cls = merged.Packages[0].Classes[0];
+        await Assert.That(cls.Lines[0].Hits).IsEqualTo(3);              // max(3, 2)
+        await Assert.That(cls.Lines[0].CoveredBranches).IsEqualTo(2);   // max(1, 2)
+        await Assert.That(cls.Lines[0].TotalBranches).IsEqualTo(2);
+        await Assert.That(cls.Lines[0].AllBranchesCovered).IsTrue();
+    }
+
+    /// <summary>
+    /// Verifies that merging reports with disjoint packages preserves both.
+    /// </summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Test]
+    public async Task MergeReports_DisjointPackages_PreservesBoth()
+    {
+        var reportA = CoberturaParser.ParseString(
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <coverage version="1" timestamp="1700000000" line-rate="1" branch-rate="1">
+              <sources><source>/src</source></sources>
+              <packages>
+                <package name="PkgA" line-rate="1" branch-rate="1" complexity="1">
+                  <classes>
+                    <class name="PkgA.Foo" filename="/src/Foo.cs" line-rate="1" branch-rate="1" complexity="1">
+                      <methods />
+                      <lines>
+                        <line number="1" hits="1" branch="false" />
+                      </lines>
+                    </class>
+                  </classes>
+                </package>
+              </packages>
+            </coverage>
+            """);
+
+        var reportB = CoberturaParser.ParseString(
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <coverage version="1" timestamp="1700000001" line-rate="1" branch-rate="1">
+              <sources><source>/src</source></sources>
+              <packages>
+                <package name="PkgB" line-rate="1" branch-rate="1" complexity="1">
+                  <classes>
+                    <class name="PkgB.Bar" filename="/src/Bar.cs" line-rate="1" branch-rate="1" complexity="1">
+                      <methods />
+                      <lines>
+                        <line number="1" hits="1" branch="false" />
+                      </lines>
+                    </class>
+                  </classes>
+                </package>
+              </packages>
+            </coverage>
+            """);
+
+        var merged = CoverageService.MergeReports([reportA, reportB]);
+
+        await Assert.That(merged.Packages).Count().IsEqualTo(2);
+        await Assert.That(merged.CoveredLineCount).IsEqualTo(2);
+    }
+
+    /// <summary>
+    /// Verifies that merging picks the latest timestamp across reports.
+    /// </summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Test]
+    public async Task MergeReports_PicksLatestTimestamp()
+    {
+        var reportA = CoberturaParser.ParseString(
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <coverage version="1" timestamp="1700000000" line-rate="1" branch-rate="1">
+              <packages />
+            </coverage>
+            """);
+
+        var reportB = CoberturaParser.ParseString(
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <coverage version="1" timestamp="1700000099" line-rate="1" branch-rate="1">
+              <packages />
+            </coverage>
+            """);
+
+        var merged = CoverageService.MergeReports([reportA, reportB]);
+
+        await Assert.That(merged.Timestamp).IsNotNull();
+        await Assert.That(merged.Timestamp!.Value).IsEqualTo(DateTimeOffset.FromUnixTimeSeconds(1700000099));
+    }
+
+    /// <summary>
+    /// Verifies that merging a single report returns it unchanged.
+    /// </summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Test]
+    public async Task MergeReports_SingleReport_PassesThrough()
+    {
+        var report = CoberturaParser.ParseString(
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <coverage version="1" timestamp="1700000000" line-rate="0.8" branch-rate="0.5">
+              <sources><source>/src</source></sources>
+              <packages>
+                <package name="Lib" line-rate="0.8" branch-rate="0.5" complexity="1">
+                  <classes>
+                    <class name="Lib.Foo" filename="/src/Foo.cs" line-rate="0.8" branch-rate="0.5" complexity="1">
+                      <methods />
+                      <lines>
+                        <line number="1" hits="1" branch="false" />
+                        <line number="2" hits="0" branch="false" />
+                      </lines>
+                    </class>
+                  </classes>
+                </package>
+              </packages>
+            </coverage>
+            """);
+
+        var merged = CoverageService.MergeReports([report]);
+
+        await Assert.That(merged.CoverableLineCount).IsEqualTo(2);
+        await Assert.That(merged.CoveredLineCount).IsEqualTo(1);
+        await Assert.That(merged.MissedLineCount).IsEqualTo(1);
+    }
 }
