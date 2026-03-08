@@ -44,13 +44,22 @@ dotnet run --project UnitTestMcp.Server
 
 ### Generating Coverage Reports
 
-First, run your tests with code coverage collection enabled:
+With MTP, code coverage is configured via `testconfig.json` and the `Microsoft.Testing.Extensions.CodeCoverage` extension. Add the extension to your test project and configure it for Cobertura output:
 
-```bash
-dotnet test --collect:"XPlat Code Coverage"
+```json
+{
+    "extensions": [
+        {
+            "extensionId": "Microsoft.Testing.Extensions.CodeCoverage",
+            "settings": {
+                "format": "cobertura"
+            }
+        }
+    ]
+}
 ```
 
-Or if using MTP with `testconfig.json` configured for Cobertura output, simply:
+Then run your tests normally:
 
 ```bash
 dotnet test
@@ -63,8 +72,8 @@ Add to your Claude Code MCP configuration (`~/.claude/claude_desktop_config.json
 ```json
 {
   "mcpServers": {
-    "unittest-mcp": {
-      "command": "unittest-mcp",
+    "dotnet-mtp-coverage-mcp": {
+      "command": "dotnet-mtp-coverage-mcp",
       "args": []
     }
   }
@@ -73,10 +82,7 @@ Add to your Claude Code MCP configuration (`~/.claude/claude_desktop_config.json
 
 ## Cobertura XML Format
 
-This tool expects Cobertura XML format, which is the standard output from:
-
-- `dotnet test --collect:"XPlat Code Coverage"` (using coverlet)
-- Microsoft.Testing.Extensions.CodeCoverage with `"format": "cobertura"` in `testconfig.json`
+This tool expects Cobertura XML format, which is the standard output from the `Microsoft.Testing.Extensions.CodeCoverage` extension when configured with `"format": "cobertura"` in `testconfig.json`.
 
 ## Building
 

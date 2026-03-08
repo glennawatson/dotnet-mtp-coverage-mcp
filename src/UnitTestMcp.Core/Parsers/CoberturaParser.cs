@@ -15,9 +15,9 @@ namespace UnitTestMcp.Core.Parsers;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The Cobertura XML format is the standard output from:
-/// <c>dotnet test --collect:"XPlat Code Coverage"</c>
-/// and from the Microsoft.Testing.Extensions.CodeCoverage extension configured with <c>"format": "cobertura"</c>.
+/// The Cobertura XML format is the standard output from the
+/// Microsoft.Testing.Extensions.CodeCoverage MTP extension configured with <c>"format": "cobertura"</c>
+/// in <c>testconfig.json</c>.
 /// </para>
 /// <para>
 /// Cobertura XML parsing logic adapted from ReportGenerator by Daniel Palme.

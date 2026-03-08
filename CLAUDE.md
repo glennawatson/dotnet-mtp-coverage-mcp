@@ -13,10 +13,10 @@ cd src && dotnet build
 # Run all tests
 cd src && dotnet test
 
-# Run tests with coverage
-cd src && dotnet test --collect:"XPlat Code Coverage"
+# Run tests with coverage (configured via testconfig.json, Cobertura output)
+cd src && dotnet test
 
-# Run the MCP server locally
+# Run the MCP server locally (tool command: dotnet-mtp-coverage-mcp)
 cd src && dotnet run --project UnitTestMcp.Server
 ```
 
