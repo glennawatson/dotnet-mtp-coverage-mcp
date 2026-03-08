@@ -58,6 +58,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Nerdbank.GitVersioning" PrivateAssets="all" />
     <PackageReference Include="stylecop.analyzers" PrivateAssets="all" />
     <PackageReference Include="Roslynator.Analyzers" PrivateAssets="All" />
   </ItemGroup>
