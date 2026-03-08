@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/tests/">
+    <Project Path="tests/UnitTestMcp.Tests/UnitTestMcp.Tests.csproj" />
+  </Folder>
+  <Project Path="UnitTestMcp.Core/UnitTestMcp.Core.csproj" />
+  <Project Path="UnitTestMcp.Server/UnitTestMcp.Server.csproj" />
+</Solution>
