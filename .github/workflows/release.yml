@@ -43,22 +43,12 @@ jobs:
         run: dotnet test --solution UnitTestMcp.slnx --no-build --configuration Release
 
       - name: Install GitReleaseNoteGenerator
-        run: dotnet tool install --global GitReleaseNoteGenerator
+        run: dotnet tool install -g GitReleaseNoteGenerator
 
       - name: Generate release notes
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: git-release-note-generator --release-version "${{ steps.nbgv.outputs.SemVer2 }}" --output-file "${{ github.workspace }}/release-notes.md"
-
-      - name: Verify release notes exist
-        run: |
-          if [ ! -f "${{ github.workspace }}/release-notes.md" ]; then
-            echo "Error: release-notes.md was not generated"
-            exit 1
-          fi
-          echo "Release notes file size: $(wc -c < "${{ github.workspace }}/release-notes.md") bytes"
-          echo "--- Preview ---"
-          head -20 "${{ github.workspace }}/release-notes.md"
+        run: git-release-notes --release-version "${{ steps.nbgv.outputs.SemVer2 }}" --output-file release-notes.md
 
       - name: Pack
         run: dotnet pack src/UnitTestMcp.slnx --no-build --configuration Release -o packages
@@ -98,4 +88,4 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ steps.nbgv.outputs.SemVer2 }}" --repo "${{ github.repository }}" --title "${{ steps.nbgv.outputs.SemVer2 }}" --notes-file "${{ github.workspace }}/release-notes.md"
+        run: gh release create "${{ steps.nbgv.outputs.SemVer2 }}" --repo "${{ github.repository }}" --title "${{ steps.nbgv.outputs.SemVer2 }}" --notes-file release-notes.md

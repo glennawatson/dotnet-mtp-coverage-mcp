@@ -15,6 +15,7 @@
     <Owners>glennawatson</Owners>
     <PackageTags>mcp;code-coverage;unit-testing;mtp;cobertura</PackageTags>
     <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
 
     <!-- Publish the repository URL in the built .nupkg -->
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
