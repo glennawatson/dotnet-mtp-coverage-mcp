@@ -58,7 +58,7 @@ Generated\ Files/
 
 # Coverage reports
 *.cobertura.xml
-!**/TestData/*.cobertura.xml
+!**/TestData/**/*.cobertura.xml
 coverage/
 TestResults/
 
