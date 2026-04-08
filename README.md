@@ -18,6 +18,36 @@ An MCP (Model Context Protocol) server for analyzing code coverage from MTP (Mic
 
 ## Installation
 
+
+### Quick Install
+
+Click to install in your preferred environment:
+
+[![VS Code - Install MTP Coverage MCP](https://img.shields.io/badge/VS_Code-Install_MTP_Coverage_MCP-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=mtp-coverage-mcp&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22dnx%22%2C%22args%22%3A%5B%22UnitTestMcp.Server%401.*%22%2C%22--yes%22%5D%7D)
+[![VS Code Insiders - Install MTP Coverage MCP](https://img.shields.io/badge/VS_Code_Insiders-Install_MTP_Coverage_MCP-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=mtp-coverage-mcp&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22dnx%22%2C%22args%22%3A%5B%22UnitTestMcp.Server%401.*%22%2C%22--yes%22%5D%7D&quality=insiders)
+[![Visual Studio - Install MTP Coverage MCP](https://img.shields.io/badge/Visual_Studio-Install_MTP_Coverage_MCP-5C2D91?style=flat-square&logo=visualstudio&logoColor=white)](https://vs-open.link/mcp-install?%7B%22name%22%3A%22MTP.UnitTest.MCP.Server%22%2C%22type%22%3A%22stdio%22%2C%22command%22%3A%22dnx%22%2C%22args%22%3A%5B%22UnitTestMcp.Server%401.*%22%2C%22--yes%22%5D%7D)
+
+Note:
+- These install links are prepared for the intended NuGet package V1.* identity `UnitTestMcp.Server` and do not require the `dotnet tool` to be installed first.
+- If you are not able to use these links yet, use one of the manual configuration options below.
+
+```json
+{
+  "servers": {
+    "MTP.UnitTest.MCP": {
+      "type": "stdio",
+      "command": "dnx",
+      "args": [
+        "UnitTestMcp.Server@1.*",
+        "--yes"
+      ]
+    }
+  }
+}
+```
+
+To install as a dotnet tool:
+
 ```bash
 dotnet tool install --global UnitTestMcp.Server
 ```
