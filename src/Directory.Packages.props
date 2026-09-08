@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageVersion Include="Microsoft.Build.Tasks.Git" Version="10.0.111" />
     <!-- MCP Server -->
     <PackageVersion Include="ModelContextProtocol" Version="1.1.0" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
