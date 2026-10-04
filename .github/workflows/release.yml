@@ -1,12 +1,9 @@
 name: Release
-
 on:
   workflow_dispatch:
-
 permissions:
   contents: write
   id-token: write
-
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -16,76 +13,130 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-
-      - name: Setup NBGV
-        uses: dotnet/nbgv@v0.4.2
-        id: nbgv
-        with:
-          setAllVars: true
-
-      - name: Restore
-        run: dotnet restore src/UnitTestMcp.slnx
-
-      - name: Build
-        run: dotnet build src/UnitTestMcp.slnx --no-restore --configuration Release
-
-      - name: Test
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Setup .NET
+      uses: glennawatson/actions-common/.github/actions/setup-sdk@main
+      with:
+        dotnet-version: |
+          10.0.x
+          11.0.x
+    - name: Setup NBGV
+      uses: dotnet/nbgv@v0.4.2
+      id: nbgv
+      with:
+        setAllVars: true
+    - name: Restore
+      uses: glennawatson/actions-common/.github/actions/run-command@main
+      with:
+        command: dotnet
+        arguments: |-
+          restore
+          src/UnitTestMcp.slnx
+        working-directory: .
+    - name: Build
+      uses: glennawatson/actions-common/.github/actions/run-command@main
+      with:
+        command: dotnet
+        arguments: |-
+          build
+          src/UnitTestMcp.slnx
+          --no-restore
+          --configuration
+          Release
+        working-directory: .
+    - name: Test
+      uses: glennawatson/actions-common/.github/actions/run-command@main
+      with:
+        command: dotnet
+        arguments: |-
+          test
+          --solution
+          UnitTestMcp.slnx
+          --no-build
+          --configuration
+          Release
         working-directory: src
-        run: dotnet test --solution UnitTestMcp.slnx --no-build --configuration Release
-
-      - name: Install GitReleaseNoteGenerator
-        run: dotnet tool install -g GitReleaseNoteGenerator
-
-      - name: Generate release notes
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: git-release-notes --release-version "${{ steps.nbgv.outputs.SemVer2 }}" --output-file release-notes.md
-
-      - name: Pack
-        run: dotnet pack src/UnitTestMcp.slnx --no-build --configuration Release -o packages
-
-      - name: Sign packages with SSL.com eSigner
-        uses: SSLcom/esigner-codesign@v1.3.2
-        with:
-          command: batch_sign
-          username: ${{ secrets.ES_USERNAME }}
-          password: ${{ secrets.ES_PASSWORD }}
-          credential_id: ${{ secrets.CREDENTIAL_ID }}
-          totp_secret: ${{ secrets.ES_TOTP_SECRET }}
-          dir_path: ./packages
-          output_path: ./signed
-          malware_block: true
-          jvm_max_memory: 2048M
-
-      - name: Upload signed packages
-        uses: actions/upload-artifact@v4
-        with:
-          name: signed-nuget
-          path: ./signed/*.nupkg
-          if-no-files-found: error
-
-      - name: NuGet login (OIDC trusted publishing)
-        uses: NuGet/login@v1
-        id: nuget-login
-        with:
-          user: ${{ secrets.NUGET_USER }}
-
-      - name: Push to NuGet
-        run: |
-          for pkg in ./signed/*.nupkg; do
-            dotnet nuget push "$pkg" --source https://api.nuget.org/v3/index.json --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
-          done
-
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ steps.nbgv.outputs.SemVer2 }}" --repo "${{ github.repository }}" --title "${{ steps.nbgv.outputs.SemVer2 }}" --notes-file release-notes.md
+    - name: Install GitReleaseNoteGenerator
+      uses: glennawatson/actions-common/.github/actions/run-command@main
+      with:
+        command: dotnet
+        arguments: |-
+          tool
+          install
+          -g
+          GitReleaseNoteGenerator
+        working-directory: .
+    - name: Generate release notes
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      uses: glennawatson/actions-common/.github/actions/run-command@main
+      with:
+        command: git-release-notes
+        arguments: |-
+          --release-version
+          ${{ steps.nbgv.outputs.SemVer2 }}
+          --output-file
+          release-notes.md
+        working-directory: .
+    - name: Pack
+      uses: glennawatson/actions-common/.github/actions/run-command@main
+      with:
+        command: dotnet
+        arguments: |-
+          pack
+          src/UnitTestMcp.slnx
+          --no-build
+          --configuration
+          Release
+          -o
+          packages
+        working-directory: .
+    - name: Sign packages with SSL.com eSigner
+      uses: SSLcom/esigner-codesign@v1.3.2
+      with:
+        command: batch_sign
+        username: ${{ secrets.ES_USERNAME }}
+        password: ${{ secrets.ES_PASSWORD }}
+        credential_id: ${{ secrets.CREDENTIAL_ID }}
+        totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+        dir_path: ./packages
+        output_path: ./signed
+        malware_block: true
+        jvm_max_memory: 2048M
+    - name: Upload signed packages
+      uses: actions/upload-artifact@v4
+      with:
+        name: signed-nuget
+        path: ./signed/*.nupkg
+        if-no-files-found: error
+    - name: NuGet login (OIDC trusted publishing)
+      uses: NuGet/login@v1
+      id: nuget-login
+      with:
+        user: ${{ secrets.NUGET_USER }}
+    - name: Push to NuGet
+      uses: glennawatson/actions-common/.github/actions/run-csharp@main
+      with:
+        shared-script: push-to-nuget-51f88d1ddf.cs
+      env:
+        NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+    - name: Create GitHub Release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      uses: glennawatson/actions-common/.github/actions/run-command@main
+      with:
+        command: gh
+        arguments: |-
+          release
+          create
+          ${{ steps.nbgv.outputs.SemVer2 }}
+          --repo
+          ${{ github.repository }}
+          --title
+          ${{ steps.nbgv.outputs.SemVer2 }}
+          --notes-file
+          release-notes.md
+        working-directory: .
