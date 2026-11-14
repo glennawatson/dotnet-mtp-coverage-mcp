@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
@@ -58,11 +58,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Using Include="System.Diagnostics" />
+    <Using Include="System.Runtime.CompilerServices" />
     <PackageReference Include="Nerdbank.GitVersioning" PrivateAssets="all" />
-    <PackageReference Include="stylecop.analyzers" PrivateAssets="all" />
-    <PackageReference Include="Roslynator.Analyzers" PrivateAssets="All" />
-  </ItemGroup>
-  <ItemGroup>
-    <AdditionalFiles Include="$(MSBuildThisFileDirectory)stylecop.json" Link="stylecop.json" />
+    <PackageReference Include="StyleSharp.Analyzers" PrivateAssets="all" />
+    <PackageReference Include="PerformanceSharp.Analyzers" PrivateAssets="all" />
+    <PackageReference Include="SecuritySharp.Analyzers" PrivateAssets="all" />
   </ItemGroup>
 </Project>

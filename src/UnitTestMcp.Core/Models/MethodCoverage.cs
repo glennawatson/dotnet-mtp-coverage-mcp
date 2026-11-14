@@ -4,19 +4,18 @@
 
 namespace UnitTestMcp.Core.Models;
 
-/// <summary>
-/// Coverage information for a single method.
-/// </summary>
-/// <remarks>
-/// Coverage model concepts adapted from ReportGenerator by Daniel Palme.
-/// See https://github.com/danielpalme/ReportGenerator.
-/// </remarks>
+/// <summary>Coverage information for a single method.</summary>
 /// <param name="Name">The method name.</param>
 /// <param name="Signature">The method signature.</param>
 /// <param name="LineCoverageRate">Line coverage as a decimal (0.0 to 1.0), or null if unavailable.</param>
 /// <param name="BranchCoverageRate">Branch coverage as a decimal (0.0 to 1.0), or null if unavailable.</param>
 /// <param name="CyclomaticComplexity">The cyclomatic complexity, if available.</param>
 /// <param name="Lines">The line coverage entries for this method.</param>
+/// <remarks>
+/// Coverage model concepts adapted from ReportGenerator by Daniel Palme.
+/// See https://github.com/danielpalme/ReportGenerator.
+/// </remarks>
+[DebuggerDisplay("{Name}: {CoveredLineCount}/{CoverableLineCount} lines")]
 public sealed record MethodCoverage(
     string Name,
     string Signature,
@@ -25,10 +24,8 @@ public sealed record MethodCoverage(
     decimal? CyclomaticComplexity,
     IReadOnlyList<LineCoverage> Lines)
 {
-    /// <summary>
-    /// Pre-computed line coverage counts, calculated once at construction time.
-    /// </summary>
-    private readonly (int CoveredLines, int CoverableLines) _counts = ComputeCounts(Lines);
+    /// <summary>Pre-computed line coverage counts, calculated once at construction time.</summary>
+    private readonly MethodCoverageCounts _counts = ComputeCounts(Lines);
 
     /// <summary>
     /// Gets the CRAP score (Change Risk Anti-Patterns).
@@ -46,27 +43,21 @@ public sealed record MethodCoverage(
                 return null;
             }
 
-            var uncovered = 1m - coverage;
+            var uncovered = 1M - coverage;
             return (cc * cc * uncovered * uncovered * uncovered) + cc;
         }
     }
 
-    /// <summary>
-    /// Gets the count of covered lines in this method.
-    /// </summary>
+    /// <summary>Gets the count of covered lines in this method.</summary>
     public int CoveredLineCount => _counts.CoveredLines;
 
-    /// <summary>
-    /// Gets the count of coverable lines in this method.
-    /// </summary>
+    /// <summary>Gets the count of coverable lines in this method.</summary>
     public int CoverableLineCount => _counts.CoverableLines;
 
-    /// <summary>
-    /// Computes covered and coverable line counts in a single pass over the lines collection.
-    /// </summary>
+    /// <summary>Computes covered and coverable line counts in a single pass over the lines collection.</summary>
     /// <param name="lines">The line coverage entries to analyze.</param>
-    /// <returns>A tuple containing the pre-computed line coverage counts.</returns>
-    private static (int CoveredLines, int CoverableLines) ComputeCounts(IReadOnlyList<LineCoverage> lines)
+    /// <returns>The cached line coverage counts.</returns>
+    private static MethodCoverageCounts ComputeCounts(IReadOnlyList<LineCoverage> lines)
     {
         var coveredLines = 0;
         var coverableLines = 0;
@@ -84,6 +75,6 @@ public sealed record MethodCoverage(
             }
         }
 
-        return (coveredLines, coverableLines);
+        return new(coveredLines, coverableLines);
     }
 }

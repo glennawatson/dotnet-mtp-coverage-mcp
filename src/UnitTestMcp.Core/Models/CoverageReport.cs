@@ -4,76 +4,53 @@
 
 namespace UnitTestMcp.Core.Models;
 
-/// <summary>
-/// Top-level coverage report containing all packages parsed from a Cobertura XML file.
-/// </summary>
+/// <summary>Top-level coverage report containing all packages parsed from a Cobertura XML file.</summary>
+/// <param name="Packages">The package-level coverage entries.</param>
+/// <param name="SourceDirectories">The source directories referenced by the report.</param>
+/// <param name="Timestamp">The UTC timestamp when the coverage was generated, if available.</param>
 /// <remarks>
 /// Coverage model concepts adapted from ReportGenerator by Daniel Palme.
 /// See https://github.com/danielpalme/ReportGenerator.
 /// </remarks>
-/// <param name="Packages">The package-level coverage entries.</param>
-/// <param name="SourceDirectories">The source directories referenced by the report.</param>
-/// <param name="Timestamp">The UTC timestamp when the coverage was generated, if available.</param>
+[DebuggerDisplay("{Packages.Count} packages")]
 public sealed record CoverageReport(
     IReadOnlyList<PackageCoverage> Packages,
     IReadOnlyList<string> SourceDirectories,
     DateTimeOffset? Timestamp)
 {
-    /// <summary>
-    /// Pre-computed aggregate line and branch coverage counts from all packages, calculated once at construction time.
-    /// </summary>
-    private readonly (int CoveredLines, int CoverableLines, int MissedLines, int TotalBranches, int CoveredBranches) _counts = ComputeCounts(Packages);
+    /// <summary>Pre-computed aggregate line and branch coverage counts from all packages, calculated once at construction time.</summary>
+    private readonly CoverageCounts _counts = ComputeCounts(Packages);
 
-    /// <summary>
-    /// Gets the total covered line count across all packages.
-    /// </summary>
+    /// <summary>Gets the total covered line count across all packages.</summary>
     public int CoveredLineCount => _counts.CoveredLines;
 
-    /// <summary>
-    /// Gets the total coverable line count across all packages.
-    /// </summary>
+    /// <summary>Gets the total coverable line count across all packages.</summary>
     public int CoverableLineCount => _counts.CoverableLines;
 
-    /// <summary>
-    /// Gets the total missed line count across all packages.
-    /// </summary>
+    /// <summary>Gets the total missed line count across all packages.</summary>
     public int MissedLineCount => _counts.MissedLines;
 
-    /// <summary>
-    /// Gets the overall line coverage rate (0.0 to 1.0), or null if no coverable lines exist.
-    /// </summary>
+    /// <summary>Gets the overall line coverage rate (0.0 to 1.0), or null if no coverable lines exist.</summary>
     public decimal? LineCoverageRate =>
         _counts.CoverableLines > 0 ? (decimal)_counts.CoveredLines / _counts.CoverableLines : null;
 
-    /// <summary>
-    /// Gets the total branch count across all packages.
-    /// </summary>
+    /// <summary>Gets the total branch count across all packages.</summary>
     public int TotalBranchCount => _counts.TotalBranches;
 
-    /// <summary>
-    /// Gets the covered branch count across all packages.
-    /// </summary>
+    /// <summary>Gets the covered branch count across all packages.</summary>
     public int CoveredBranchCount => _counts.CoveredBranches;
 
-    /// <summary>
-    /// Gets the missed branch count across all packages.
-    /// </summary>
+    /// <summary>Gets the missed branch count across all packages.</summary>
     public int MissedBranchCount => _counts.TotalBranches - _counts.CoveredBranches;
 
-    /// <summary>
-    /// Gets the overall branch coverage rate (0.0 to 1.0), or null if no branches exist.
-    /// </summary>
+    /// <summary>Gets the overall branch coverage rate (0.0 to 1.0), or null if no branches exist.</summary>
     public decimal? BranchCoverageRate =>
         _counts.TotalBranches > 0 ? (decimal)_counts.CoveredBranches / _counts.TotalBranches : null;
 
-    /// <summary>
-    /// Gets all classes across all packages, materialized as a list for efficient repeated access.
-    /// </summary>
+    /// <summary>Gets all classes across all packages, materialized as a list for efficient repeated access.</summary>
     public IReadOnlyList<ClassCoverage> AllClasses { get; } = CollectAllClasses(Packages);
 
-    /// <summary>
-    /// Collects all classes from all packages into a single materialized list.
-    /// </summary>
+    /// <summary>Collects all classes from all packages into a single materialized list.</summary>
     /// <param name="packages">The package coverage entries to collect from.</param>
     /// <returns>A flat list of all class coverage entries.</returns>
     private static List<ClassCoverage> CollectAllClasses(IReadOnlyList<PackageCoverage> packages)
@@ -93,12 +70,10 @@ public sealed record CoverageReport(
         return result;
     }
 
-    /// <summary>
-    /// Aggregates pre-computed line and branch counts from all packages in a single pass.
-    /// </summary>
+    /// <summary>Aggregates pre-computed line and branch counts from all packages in a single pass.</summary>
     /// <param name="packages">The package coverage entries to aggregate.</param>
-    /// <returns>A tuple containing the aggregated coverage counts.</returns>
-    private static (int CoveredLines, int CoverableLines, int MissedLines, int TotalBranches, int CoveredBranches) ComputeCounts(IReadOnlyList<PackageCoverage> packages)
+    /// <returns>The aggregated line and branch counts.</returns>
+    private static CoverageCounts ComputeCounts(IReadOnlyList<PackageCoverage> packages)
     {
         var coveredLines = 0;
         var coverableLines = 0;
@@ -115,6 +90,6 @@ public sealed record CoverageReport(
             coveredBranches += p.CoveredBranchCount;
         }
 
-        return (coveredLines, coverableLines, missedLines, totalBranches, coveredBranches);
+        return new(coveredLines, coverableLines, missedLines, totalBranches, coveredBranches);
     }
 }

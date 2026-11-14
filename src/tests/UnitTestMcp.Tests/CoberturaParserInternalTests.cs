@@ -12,14 +12,10 @@ using UnitTestMcp.Core.Parsers;
 
 namespace UnitTestMcp.Tests;
 
-/// <summary>
-/// Tests for the internal methods of <see cref="CoberturaParser"/>.
-/// </summary>
+/// <summary>Tests for the internal methods of <see cref="CoberturaParser"/>.</summary>
 public class CoberturaParserInternalTests
 {
-    /// <summary>
-    /// Verifies ParseTimestamp returns null for null input.
-    /// </summary>
+    /// <summary>Verifies ParseTimestamp returns null for null input.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ParseTimestamp_Null_ReturnsNull()
@@ -28,21 +24,17 @@ public class CoberturaParserInternalTests
         await Assert.That(result).IsNull();
     }
 
-    /// <summary>
-    /// Verifies ParseTimestamp parses a valid Unix epoch.
-    /// </summary>
+    /// <summary>Verifies ParseTimestamp parses a valid Unix epoch.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ParseTimestamp_ValidEpoch_ReturnsDateTimeOffset()
     {
         var result = CoberturaParser.ParseTimestamp("1700000000");
         await Assert.That(result).IsNotNull();
-        await Assert.That(result!.Value).IsEqualTo(DateTimeOffset.FromUnixTimeSeconds(1700000000));
+        await Assert.That(result!.Value).IsEqualTo(expected: DateTimeOffset.FromUnixTimeSeconds(seconds: 1_700_000_000));
     }
 
-    /// <summary>
-    /// Verifies ParseTimestamp returns null for unparseable input.
-    /// </summary>
+    /// <summary>Verifies ParseTimestamp returns null for unparseable input.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ParseTimestamp_InvalidString_ReturnsNull()
@@ -51,9 +43,7 @@ public class CoberturaParserInternalTests
         await Assert.That(result).IsNull();
     }
 
-    /// <summary>
-    /// Verifies ParseDecimalAttribute returns null for missing attribute.
-    /// </summary>
+    /// <summary>Verifies ParseDecimalAttribute returns null for missing attribute.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ParseDecimalAttribute_MissingAttribute_ReturnsNull()
@@ -63,9 +53,7 @@ public class CoberturaParserInternalTests
         await Assert.That(result).IsNull();
     }
 
-    /// <summary>
-    /// Verifies ParseDecimalAttribute returns null for NaN.
-    /// </summary>
+    /// <summary>Verifies ParseDecimalAttribute returns null for NaN.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ParseDecimalAttribute_NaN_ReturnsNull()
@@ -75,33 +63,27 @@ public class CoberturaParserInternalTests
         await Assert.That(result).IsNull();
     }
 
-    /// <summary>
-    /// Verifies ParseDecimalAttribute parses a period-delimited decimal.
-    /// </summary>
+    /// <summary>Verifies ParseDecimalAttribute parses a period-delimited decimal.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ParseDecimalAttribute_PeriodDecimal_ParsesCorrectly()
     {
         var element = new XElement("test", new XAttribute("rate", "0.75"));
         var result = CoberturaParser.ParseDecimalAttribute(element, "rate");
-        await Assert.That(result).IsEqualTo(0.75m);
+        await Assert.That(result).IsEqualTo(expected: 0.75M);
     }
 
-    /// <summary>
-    /// Verifies ParseDecimalAttribute handles comma-delimited decimals from some locales.
-    /// </summary>
+    /// <summary>Verifies ParseDecimalAttribute handles comma-delimited decimals from some locales.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ParseDecimalAttribute_CommaDecimal_ParsesCorrectly()
     {
         var element = new XElement("test", new XAttribute("rate", "0,75"));
         var result = CoberturaParser.ParseDecimalAttribute(element, "rate");
-        await Assert.That(result).IsEqualTo(0.75m);
+        await Assert.That(result).IsEqualTo(expected: 0.75M);
     }
 
-    /// <summary>
-    /// Verifies ParseDecimalAttribute returns null for completely invalid text.
-    /// </summary>
+    /// <summary>Verifies ParseDecimalAttribute returns null for completely invalid text.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ParseDecimalAttribute_InvalidText_ReturnsNull()
@@ -111,104 +93,88 @@ public class CoberturaParserInternalTests
         await Assert.That(result).IsNull();
     }
 
-    /// <summary>
-    /// Verifies DetermineLineStatus returns NotCovered for zero hits.
-    /// </summary>
+    /// <summary>Verifies DetermineLineStatus returns NotCovered for zero hits.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task DetermineLineStatus_ZeroHits_ReturnsNotCovered()
     {
-        var result = CoberturaParser.DetermineLineStatus(0, false, null, null);
+        var result = CoberturaParser.DetermineLineStatus(hits: 0, false, null, null);
         await Assert.That(result).IsEqualTo(LineVisitStatus.NotCovered);
     }
 
-    /// <summary>
-    /// Verifies DetermineLineStatus returns Covered for non-branch line with hits.
-    /// </summary>
+    /// <summary>Verifies DetermineLineStatus returns Covered for non-branch line with hits.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task DetermineLineStatus_NonBranchWithHits_ReturnsCovered()
     {
-        var result = CoberturaParser.DetermineLineStatus(5, false, null, null);
+        var result = CoberturaParser.DetermineLineStatus(hits: 5, false, null, null);
         await Assert.That(result).IsEqualTo(LineVisitStatus.Covered);
     }
 
-    /// <summary>
-    /// Verifies DetermineLineStatus returns PartiallyCovered for partial branches.
-    /// </summary>
+    /// <summary>Verifies DetermineLineStatus returns PartiallyCovered for partial branches.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task DetermineLineStatus_PartialBranch_ReturnsPartiallyCovered()
     {
-        var result = CoberturaParser.DetermineLineStatus(3, true, 1, 2);
+        var result = CoberturaParser.DetermineLineStatus(hits: 3, true, coveredBranches: 1, totalBranches: 2);
         await Assert.That(result).IsEqualTo(LineVisitStatus.PartiallyCovered);
     }
 
-    /// <summary>
-    /// Verifies DetermineLineStatus returns Covered for fully covered branches.
-    /// </summary>
+    /// <summary>Verifies DetermineLineStatus returns Covered for fully covered branches.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task DetermineLineStatus_FullBranch_ReturnsCovered()
     {
-        var result = CoberturaParser.DetermineLineStatus(3, true, 2, 2);
+        var result = CoberturaParser.DetermineLineStatus(hits: 3, true, coveredBranches: 2, totalBranches: 2);
         await Assert.That(result).IsEqualTo(LineVisitStatus.Covered);
     }
 
-    /// <summary>
-    /// Verifies DetermineLineStatus returns Covered for branch line without branch info.
-    /// </summary>
+    /// <summary>Verifies DetermineLineStatus returns Covered for branch line without branch info.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task DetermineLineStatus_BranchWithoutInfo_ReturnsCovered()
     {
-        var result = CoberturaParser.DetermineLineStatus(1, true, null, null);
+        var result = CoberturaParser.DetermineLineStatus(hits: 1, true, null, null);
         await Assert.That(result).IsEqualTo(LineVisitStatus.Covered);
     }
 
-    /// <summary>
-    /// Verifies ParseLine parses a simple non-branch line.
-    /// </summary>
+    /// <summary>Verifies ParseLine parses a simple non-branch line.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ParseLine_SimpleNonBranch_ParsesCorrectly()
     {
-        var element = XElement.Parse("""<line number="10" hits="5" branch="false" />""");
+        var element = XElement.Parse("<line number=\"10\" hits=\"5\" branch=\"false\" />");
         var result = CoberturaParser.ParseLine(element);
 
-        await Assert.That(result.LineNumber).IsEqualTo(10);
-        await Assert.That(result.Hits).IsEqualTo(5);
+        await Assert.That(result.LineNumber).IsEqualTo(expected: 10);
+        await Assert.That(result.Hits).IsEqualTo(expected: 5);
         await Assert.That(result.IsBranch).IsFalse();
         await Assert.That(result.Status).IsEqualTo(LineVisitStatus.Covered);
         await Assert.That(result.CoveredBranches).IsNull();
         await Assert.That(result.TotalBranches).IsNull();
     }
 
-    /// <summary>
-    /// Verifies ParseLine parses a branch line with condition coverage.
-    /// </summary>
+    /// <summary>Verifies ParseLine parses a branch line with condition coverage.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ParseLine_BranchWithCondition_ParsesCorrectly()
     {
-        var element = XElement.Parse("""<line number="20" hits="3" branch="true" condition-coverage="50% (1/2)" />""");
+        var element = XElement.Parse("<line number=\"20\" hits=\"3\" branch=\"true\" condition-coverage=\"50% (1/2)\" />");
         var result = CoberturaParser.ParseLine(element);
 
-        await Assert.That(result.LineNumber).IsEqualTo(20);
+        await Assert.That(result.LineNumber).IsEqualTo(expected: 20);
         await Assert.That(result.IsBranch).IsTrue();
-        await Assert.That(result.CoveredBranches).IsEqualTo(1);
-        await Assert.That(result.TotalBranches).IsEqualTo(2);
+        await Assert.That(result.CoveredBranches).IsEqualTo(expected: 1);
+        await Assert.That(result.TotalBranches).IsEqualTo(expected: 2);
         await Assert.That(result.Status).IsEqualTo(LineVisitStatus.PartiallyCovered);
     }
 
-    /// <summary>
-    /// Verifies ParseLine handles branch line without condition-coverage attribute.
-    /// </summary>
+    /// <summary>Verifies ParseLine handles branch line without condition-coverage attribute.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ParseLine_BranchWithoutCondition_HasNullBranches()
     {
-        var element = XElement.Parse("""<line number="5" hits="1" branch="true" />""");
+        var element = XElement.Parse("<line number=\"5\" hits=\"1\" branch=\"true\" />");
         var result = CoberturaParser.ParseLine(element);
 
         await Assert.That(result.IsBranch).IsTrue();
@@ -217,36 +183,30 @@ public class CoberturaParserInternalTests
         await Assert.That(result.Status).IsEqualTo(LineVisitStatus.Covered);
     }
 
-    /// <summary>
-    /// Verifies ParseLine defaults line number and hits to 0 when attributes are missing.
-    /// </summary>
+    /// <summary>Verifies ParseLine defaults line number and hits to 0 when attributes are missing.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ParseLine_MissingAttributes_DefaultsToZero()
     {
-        var element = XElement.Parse("""<line />""");
+        var element = XElement.Parse("<line />");
         var result = CoberturaParser.ParseLine(element);
 
-        await Assert.That(result.LineNumber).IsEqualTo(0);
-        await Assert.That(result.Hits).IsEqualTo(0);
+        await Assert.That(result.LineNumber).IsEqualTo(expected: 0);
+        await Assert.That(result.Hits).IsEqualTo(expected: 0);
         await Assert.That(result.IsBranch).IsFalse();
         await Assert.That(result.Status).IsEqualTo(LineVisitStatus.NotCovered);
     }
 
-    /// <summary>
-    /// Verifies ParseLines returns empty list for null element.
-    /// </summary>
+    /// <summary>Verifies ParseLines returns empty list for null element.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ParseLines_NullElement_ReturnsEmptyList()
     {
         var result = CoberturaParser.ParseLines(null);
-        await Assert.That(result).Count().IsEqualTo(0);
+        await Assert.That(result).Count().IsEqualTo(expected: 0);
     }
 
-    /// <summary>
-    /// Verifies ParseLines returns sorted lines using binary search insertion.
-    /// </summary>
+    /// <summary>Verifies ParseLines returns sorted lines using binary search insertion.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ParseLines_UnsortedInput_ReturnsSorted()
@@ -262,15 +222,13 @@ public class CoberturaParserInternalTests
 
         var result = CoberturaParser.ParseLines(element);
 
-        await Assert.That(result).Count().IsEqualTo(3);
-        await Assert.That(result[0].LineNumber).IsEqualTo(10);
-        await Assert.That(result[1].LineNumber).IsEqualTo(20);
-        await Assert.That(result[2].LineNumber).IsEqualTo(30);
+        await Assert.That(result).Count().IsEqualTo(expected: 3);
+        await Assert.That(value: result[0].LineNumber).IsEqualTo(expected: 10);
+        await Assert.That(value: result[1].LineNumber).IsEqualTo(expected: 20);
+        await Assert.That(value: result[2].LineNumber).IsEqualTo(expected: 30);
     }
 
-    /// <summary>
-    /// Verifies ParseLines deduplicates lines with the same line number.
-    /// </summary>
+    /// <summary>Verifies ParseLines deduplicates lines with the same line number.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ParseLines_DuplicateLineNumbers_Deduplicates()
@@ -285,34 +243,26 @@ public class CoberturaParserInternalTests
 
         var result = CoberturaParser.ParseLines(element);
 
-        await Assert.That(result).Count().IsEqualTo(1);
-        await Assert.That(result[0].LineNumber).IsEqualTo(10);
+        await Assert.That(result).Count().IsEqualTo(expected: 1);
+        await Assert.That(value: result[0].LineNumber).IsEqualTo(expected: 10);
     }
 
-    /// <summary>
-    /// Verifies ParseMethod falls back to class lines when method has no lines.
-    /// </summary>
+    /// <summary>Verifies ParseMethod falls back to class lines when method has no lines.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ParseMethod_NoMethodLines_FallsBackToClassLines()
     {
         var methodElement = XElement.Parse(
-            """<method name="Foo" signature="()" line-rate="1" branch-rate="1" complexity="1" />""");
-        var classLines = new List<LineCoverage>
-        {
-            new(10, 5, LineVisitStatus.Covered),
-            new(11, 3, LineVisitStatus.Covered),
-        };
+            "<method name=\"Foo\" signature=\"()\" line-rate=\"1\" branch-rate=\"1\" complexity=\"1\" />");
+        var classLines = new List<LineCoverage> { new(LineNumber: 10, Hits: 5, LineVisitStatus.Covered), new(LineNumber: 11, Hits: 3, LineVisitStatus.Covered), };
 
         var result = CoberturaParser.ParseMethod(methodElement, classLines);
 
         await Assert.That(result.Name).IsEqualTo("Foo");
-        await Assert.That(result.Lines).Count().IsEqualTo(2);
+        await Assert.That(result.Lines).Count().IsEqualTo(expected: 2);
     }
 
-    /// <summary>
-    /// Verifies ParseMethod uses its own lines when present.
-    /// </summary>
+    /// <summary>Verifies ParseMethod uses its own lines when present.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ParseMethod_HasOwnLines_UsesOwnLines()
@@ -325,21 +275,15 @@ public class CoberturaParserInternalTests
               </lines>
             </method>
             """);
-        var classLines = new List<LineCoverage>
-        {
-            new(10, 5, LineVisitStatus.Covered),
-            new(11, 3, LineVisitStatus.Covered),
-        };
+        var classLines = new List<LineCoverage> { new(LineNumber: 10, Hits: 5, LineVisitStatus.Covered), new(LineNumber: 11, Hits: 3, LineVisitStatus.Covered), };
 
         var result = CoberturaParser.ParseMethod(methodElement, classLines);
 
-        await Assert.That(result.Lines).Count().IsEqualTo(1);
-        await Assert.That(result.Lines[0].LineNumber).IsEqualTo(5);
+        await Assert.That(result.Lines).Count().IsEqualTo(expected: 1);
+        await Assert.That(value: result.Lines[0].LineNumber).IsEqualTo(expected: 5);
     }
 
-    /// <summary>
-    /// Verifies ParseClass parses all fields correctly.
-    /// </summary>
+    /// <summary>Verifies ParseClass parses all fields correctly.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ParseClass_ParsesAllFields()
@@ -365,15 +309,13 @@ public class CoberturaParserInternalTests
 
         await Assert.That(result.Name).IsEqualTo("Ns.Foo");
         await Assert.That(result.FileName).IsEqualTo("/src/Foo.cs");
-        await Assert.That(result.Methods).Count().IsEqualTo(1);
-        await Assert.That(result.Lines).Count().IsEqualTo(2);
-        await Assert.That(result.CoveredLineCount).IsEqualTo(1);
-        await Assert.That(result.MissedLineCount).IsEqualTo(1);
+        await Assert.That(result.Methods).Count().IsEqualTo(expected: 1);
+        await Assert.That(result.Lines).Count().IsEqualTo(expected: 2);
+        await Assert.That(result.CoveredLineCount).IsEqualTo(expected: 1);
+        await Assert.That(result.MissedLineCount).IsEqualTo(expected: 1);
     }
 
-    /// <summary>
-    /// Verifies ParsePackage parses all fields correctly.
-    /// </summary>
+    /// <summary>Verifies ParsePackage parses all fields correctly.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ParsePackage_ParsesAllFields()
@@ -395,13 +337,11 @@ public class CoberturaParserInternalTests
         var result = CoberturaParser.ParsePackage(element);
 
         await Assert.That(result.Name).IsEqualTo("MyPkg");
-        await Assert.That(result.Classes).Count().IsEqualTo(1);
-        await Assert.That(result.CoveredLineCount).IsEqualTo(1);
+        await Assert.That(result.Classes).Count().IsEqualTo(expected: 1);
+        await Assert.That(result.CoveredLineCount).IsEqualTo(expected: 1);
     }
 
-    /// <summary>
-    /// Verifies BranchCoverageRegex matches the expected pattern.
-    /// </summary>
+    /// <summary>Verifies BranchCoverageRegex matches the expected pattern.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task BranchCoverageRegex_MatchesPattern()
@@ -414,9 +354,7 @@ public class CoberturaParserInternalTests
         await Assert.That(match.Groups["total"].Value).IsEqualTo("2");
     }
 
-    /// <summary>
-    /// Verifies BranchCoverageRegex does not match invalid input.
-    /// </summary>
+    /// <summary>Verifies BranchCoverageRegex does not match invalid input.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task BranchCoverageRegex_NoMatch_ReturnsFalse()
@@ -427,17 +365,15 @@ public class CoberturaParserInternalTests
         await Assert.That(match.Success).IsFalse();
     }
 
-    /// <summary>
-    /// Verifies LineNumberComparer sorts by line number.
-    /// </summary>
+    /// <summary>Verifies LineNumberComparer sorts by line number.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task LineNumberComparer_SortsByLineNumber()
     {
-        var a = new LineCoverage(10, 1, LineVisitStatus.Covered);
-        var b = new LineCoverage(5, 1, LineVisitStatus.Covered);
+        var a = new LineCoverage(LineNumber: 10, Hits: 1, LineVisitStatus.Covered);
+        var b = new LineCoverage(LineNumber: 5, Hits: 1, LineVisitStatus.Covered);
 
         var result = CoberturaParser.LineNumberComparer.Compare(a, b);
-        await Assert.That(result).IsGreaterThan(0); // 10 > 5
+        await Assert.That(result).IsGreaterThan(minimum: 0); // 10 > 5
     }
 }

@@ -24,14 +24,25 @@ namespace UnitTestMcp.Tests;
 /// </remarks>
 public class RealWorldMergeTests
 {
-    /// <summary>
-    /// Gets the path to the real-world test data directory.
-    /// </summary>
+    /// <summary>The coverage report from the source generator tests.</summary>
+    private const string SourceGeneratorReportFileName = "srcgen-tests.cobertura.xml";
+
+    /// <summary>The coverage report from the binding tests.</summary>
+    private const string BindingReportFileName = "binding-tests.cobertura.xml";
+
+    /// <summary>The runtime binding package shared by the reports.</summary>
+    private const string BindingPackageName = "ReactiveUI.Binding";
+
+    /// <summary>The source generator package in the reports.</summary>
+    private const string SourceGeneratorPackageName = "ReactiveUI.Binding.SourceGenerators";
+
+    /// <summary>The reactive binding package in the reports.</summary>
+    private const string ReactivePackageName = "ReactiveUI.Binding.Reactive";
+
+    /// <summary>Gets the path to the real-world test data directory.</summary>
     private static string RealWorldDataDir => Path.Combine(AppContext.BaseDirectory, "TestData", "real-world");
 
-    /// <summary>
-    /// Gets the path to the full real-world test data directory with all 15 TFM reports.
-    /// </summary>
+    /// <summary>Gets the path to the full real-world test data directory with all 15 TFM reports.</summary>
     private static string RealWorldFullDataDir => Path.Combine(AppContext.BaseDirectory, "TestData", "real-world-full");
 
     /// <summary>
@@ -44,61 +55,64 @@ public class RealWorldMergeTests
     public async Task MergeReports_ZeroPercentAndHighCoverage_TakesHighCoverage()
     {
         var srcGenReport = await CoberturaParser.ParseFileAsync(
-            Path.Combine(RealWorldDataDir, "srcgen-tests.cobertura.xml"));
+            Path.Combine(RealWorldDataDir, SourceGeneratorReportFileName),
+            CancellationToken.None);
         var bindingReport = await CoberturaParser.ParseFileAsync(
-            Path.Combine(RealWorldDataDir, "binding-tests.cobertura.xml"));
+            Path.Combine(RealWorldDataDir, BindingReportFileName),
+            CancellationToken.None);
 
         // Verify preconditions: srcgen has 0% for ReactiveUI.Binding
-        var srcGenPkg = srcGenReport.Packages.First(p => p.Name == "ReactiveUI.Binding");
-        await Assert.That(srcGenPkg.CoveredLineCount).IsEqualTo(0);
-        await Assert.That(srcGenPkg.CoverableLineCount).IsGreaterThan(1000);
+        var srcGenPkg = srcGenReport.Packages.First(static p => p.Name == BindingPackageName);
+        await Assert.That(srcGenPkg.CoveredLineCount).IsEqualTo(expected: 0);
+        await Assert.That(srcGenPkg.CoverableLineCount).IsGreaterThan(minimum: 1000);
 
         // Verify preconditions: binding tests has ~99.8% for ReactiveUI.Binding
-        var bindingPkg = bindingReport.Packages.First(p => p.Name == "ReactiveUI.Binding");
-        await Assert.That(bindingPkg.CoveredLineCount).IsGreaterThan(1600);
+        var bindingPkg = bindingReport.Packages.First(static p => p.Name == BindingPackageName);
+        await Assert.That(bindingPkg.CoveredLineCount).IsGreaterThan(minimum: 1600);
 
         // Merge the two reports
         var merged = CoverageService.MergeReports([srcGenReport, bindingReport]);
 
         // After merge, ReactiveUI.Binding should have the combined (best) coverage
-        var mergedPkg = merged.Packages.First(p => p.Name == "ReactiveUI.Binding");
+        var mergedPkg = merged.Packages.First(static p => p.Name == BindingPackageName);
         await Assert.That(mergedPkg.CoveredLineCount)
             .IsGreaterThanOrEqualTo(bindingPkg.CoveredLineCount);
         await Assert.That(mergedPkg.MissedLineCount)
             .IsLessThanOrEqualTo(bindingPkg.MissedLineCount);
     }
 
-    /// <summary>
-    /// Verifies that merging all four real-world reports produces correct overall coverage
-    /// for the ReactiveUI.Binding package.
-    /// </summary>
+    /// <summary>Verifies that merging all four real-world reports produces correct overall coverage for the ReactiveUI.Binding package.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task MergeAllReports_ReactiveUIBinding_HasCorrectCoverage()
     {
         var srcGenReport = await CoberturaParser.ParseFileAsync(
-            Path.Combine(RealWorldDataDir, "srcgen-tests.cobertura.xml"));
+            Path.Combine(RealWorldDataDir, SourceGeneratorReportFileName),
+            CancellationToken.None);
         var bindingReport = await CoberturaParser.ParseFileAsync(
-            Path.Combine(RealWorldDataDir, "binding-tests.cobertura.xml"));
+            Path.Combine(RealWorldDataDir, BindingReportFileName),
+            CancellationToken.None);
         var analyzerReport = await CoberturaParser.ParseFileAsync(
-            Path.Combine(RealWorldDataDir, "analyzer-tests.cobertura.xml"));
+            Path.Combine(RealWorldDataDir, "analyzer-tests.cobertura.xml"),
+            CancellationToken.None);
         var generatedCodeReport = await CoberturaParser.ParseFileAsync(
-            Path.Combine(RealWorldDataDir, "generatedcode-tests.cobertura.xml"));
+            Path.Combine(RealWorldDataDir, "generatedcode-tests.cobertura.xml"),
+            CancellationToken.None);
 
         var merged = CoverageService.MergeReports(
             [srcGenReport, bindingReport, analyzerReport, generatedCodeReport]);
 
         // ReactiveUI.Binding should have coverage from the binding tests
-        var bindingPkg = merged.Packages.First(p => p.Name == "ReactiveUI.Binding");
-        await Assert.That(bindingPkg.CoveredLineCount).IsGreaterThan(1600);
+        var bindingPkg = merged.Packages.First(static p => p.Name == BindingPackageName);
+        await Assert.That(bindingPkg.CoveredLineCount).IsGreaterThan(minimum: 1600);
 
         // ReactiveUI.Binding.SourceGenerators should still have its high coverage
-        var srcGenPkg = merged.Packages.First(p => p.Name == "ReactiveUI.Binding.SourceGenerators");
-        await Assert.That(srcGenPkg.CoveredLineCount).IsGreaterThan(3400);
+        var srcGenPkg = merged.Packages.First(static p => p.Name == SourceGeneratorPackageName);
+        await Assert.That(srcGenPkg.CoveredLineCount).IsGreaterThan(minimum: 3400);
 
         // ReactiveUI.Binding.Analyzer should have its coverage
-        var analyzerPkg = merged.Packages.First(p => p.Name == "ReactiveUI.Binding.Analyzer");
-        await Assert.That(analyzerPkg.CoveredLineCount).IsGreaterThan(280);
+        var analyzerPkg = merged.Packages.First(static p => p.Name == "ReactiveUI.Binding.Analyzer");
+        await Assert.That(analyzerPkg.CoveredLineCount).IsGreaterThan(minimum: 280);
     }
 
     /// <summary>
@@ -110,24 +124,26 @@ public class RealWorldMergeTests
     public async Task MergeReports_IndividualClassLines_TakeMaxHits()
     {
         var srcGenReport = await CoberturaParser.ParseFileAsync(
-            Path.Combine(RealWorldDataDir, "srcgen-tests.cobertura.xml"));
+            Path.Combine(RealWorldDataDir, SourceGeneratorReportFileName),
+            CancellationToken.None);
         var bindingReport = await CoberturaParser.ParseFileAsync(
-            Path.Combine(RealWorldDataDir, "binding-tests.cobertura.xml"));
+            Path.Combine(RealWorldDataDir, BindingReportFileName),
+            CancellationToken.None);
 
         var merged = CoverageService.MergeReports([srcGenReport, bindingReport]);
 
         // Find a specific well-known class
-        var mergedClass = merged.AllClasses.First(c =>
+        var mergedClass = merged.AllClasses.First(static c =>
             c.Name == "ReactiveUI.Binding.BindingTypeConverter<TFrom, TTo>");
 
         // This class should be fully covered (from binding tests)
         await Assert.That(mergedClass.CoveredLineCount).IsEqualTo(mergedClass.CoverableLineCount);
-        await Assert.That(mergedClass.MissedLineCount).IsEqualTo(0);
+        await Assert.That(mergedClass.MissedLineCount).IsEqualTo(expected: 0);
 
         // All lines should have hits > 0
         foreach (var line in mergedClass.Lines)
         {
-            await Assert.That(line.Hits).IsGreaterThan(0);
+            await Assert.That(line.Hits).IsGreaterThan(minimum: 0);
         }
     }
 
@@ -140,12 +156,12 @@ public class RealWorldMergeTests
     public async Task LoadSolutionReportAsync_RealWorldDirectory_MergesCorrectly()
     {
         var service = new CoverageService();
-        var report = await service.LoadSolutionReportAsync(RealWorldDataDir);
+        var report = await service.LoadSolutionReportAsync(RealWorldDataDir, CancellationToken.None);
 
         // ReactiveUI.Binding should have high coverage (from binding-tests.cobertura.xml)
-        var bindingPkg = report.Packages.First(p => p.Name == "ReactiveUI.Binding");
-        await Assert.That(bindingPkg.CoveredLineCount).IsGreaterThan(1600);
-        await Assert.That(bindingPkg.CoverableLineCount).IsGreaterThan(1600);
+        var bindingPkg = report.Packages.First(static p => p.Name == BindingPackageName);
+        await Assert.That(bindingPkg.CoveredLineCount).IsGreaterThan(minimum: 1600);
+        await Assert.That(bindingPkg.CoverableLineCount).IsGreaterThan(minimum: 1600);
     }
 
     /// <summary>
@@ -159,24 +175,24 @@ public class RealWorldMergeTests
     public async Task LoadSolutionReportAsync_AllTFMs_MergesCorrectly()
     {
         var service = new CoverageService();
-        var report = await service.LoadSolutionReportAsync(RealWorldFullDataDir);
+        var report = await service.LoadSolutionReportAsync(RealWorldFullDataDir, CancellationToken.None);
 
         // Should find all packages
-        await Assert.That(report.Packages.Select(p => p.Name))
-            .Contains("ReactiveUI.Binding");
-        await Assert.That(report.Packages.Select(p => p.Name))
-            .Contains("ReactiveUI.Binding.SourceGenerators");
-        await Assert.That(report.Packages.Select(p => p.Name))
+        await Assert.That(report.Packages.Select(static p => p.Name))
+            .Contains(BindingPackageName);
+        await Assert.That(report.Packages.Select(static p => p.Name))
+            .Contains(SourceGeneratorPackageName);
+        await Assert.That(report.Packages.Select(static p => p.Name))
             .Contains("ReactiveUI.Binding.Analyzer");
 
         // ReactiveUI.Binding should have HIGH coverage (from binding tests)
-        var bindingPkg = report.Packages.First(p => p.Name == "ReactiveUI.Binding");
-        await Assert.That(bindingPkg.CoveredLineCount).IsGreaterThan(1600);
-        await Assert.That(bindingPkg.MissedLineCount).IsLessThan(10);
+        var bindingPkg = report.Packages.First(static p => p.Name == BindingPackageName);
+        await Assert.That(bindingPkg.CoveredLineCount).IsGreaterThan(minimum: 1600);
+        await Assert.That(bindingPkg.MissedLineCount).IsLessThan(maximum: 10);
 
         // SourceGenerators should also have high coverage
-        var srcGenPkg = report.Packages.First(p => p.Name == "ReactiveUI.Binding.SourceGenerators");
-        await Assert.That(srcGenPkg.CoveredLineCount).IsGreaterThan(3400);
+        var srcGenPkg = report.Packages.First(static p => p.Name == SourceGeneratorPackageName);
+        await Assert.That(srcGenPkg.CoveredLineCount).IsGreaterThan(minimum: 3400);
     }
 
     /// <summary>
@@ -188,20 +204,22 @@ public class RealWorldMergeTests
     public async Task MergeReports_ReactivePackage_HasCorrectCoverage()
     {
         var srcGenReport = await CoberturaParser.ParseFileAsync(
-            Path.Combine(RealWorldDataDir, "srcgen-tests.cobertura.xml"));
+            Path.Combine(RealWorldDataDir, SourceGeneratorReportFileName),
+            CancellationToken.None);
         var bindingReport = await CoberturaParser.ParseFileAsync(
-            Path.Combine(RealWorldDataDir, "binding-tests.cobertura.xml"));
+            Path.Combine(RealWorldDataDir, BindingReportFileName),
+            CancellationToken.None);
 
         // srcgen has Reactive at 0%, binding tests has it at 100%
-        var srcGenReactive = srcGenReport.Packages.First(p => p.Name == "ReactiveUI.Binding.Reactive");
-        await Assert.That(srcGenReactive.CoveredLineCount).IsEqualTo(0);
+        var srcGenReactive = srcGenReport.Packages.First(static p => p.Name == ReactivePackageName);
+        await Assert.That(srcGenReactive.CoveredLineCount).IsEqualTo(expected: 0);
 
-        var bindingReactive = bindingReport.Packages.First(p => p.Name == "ReactiveUI.Binding.Reactive");
-        await Assert.That(bindingReactive.CoveredLineCount).IsGreaterThan(0);
+        var bindingReactive = bindingReport.Packages.First(static p => p.Name == ReactivePackageName);
+        await Assert.That(bindingReactive.CoveredLineCount).IsGreaterThan(minimum: 0);
 
         var merged = CoverageService.MergeReports([srcGenReport, bindingReport]);
 
-        var mergedReactive = merged.Packages.First(p => p.Name == "ReactiveUI.Binding.Reactive");
+        var mergedReactive = merged.Packages.First(static p => p.Name == ReactivePackageName);
         await Assert.That(mergedReactive.CoveredLineCount)
             .IsGreaterThanOrEqualTo(bindingReactive.CoveredLineCount);
     }

@@ -4,14 +4,13 @@
 
 namespace UnitTestMcp.Core.Services;
 
-/// <summary>
-/// Missed coverage summary for an entire solution.
-/// </summary>
+/// <summary>Missed coverage summary for an entire solution.</summary>
 /// <param name="TotalCoveredLines">Total lines covered.</param>
 /// <param name="TotalCoverableLines">Total coverable lines.</param>
 /// <param name="TotalCoveredBranches">Total branches covered.</param>
 /// <param name="TotalBranches">Total branches.</param>
 /// <param name="FileReports">Per-file missed coverage reports.</param>
+[DebuggerDisplay("{TotalCoveredLines}/{TotalCoverableLines} lines")]
 public sealed record SolutionMissedCoverage(
     int TotalCoveredLines,
     int TotalCoverableLines,
@@ -19,15 +18,17 @@ public sealed record SolutionMissedCoverage(
     int TotalBranches,
     IReadOnlyList<FileMissedCoverage> FileReports)
 {
-    /// <summary>
-    /// Gets the overall line coverage percentage (0-100).
-    /// </summary>
-    public decimal? LineCoveragePercent =>
-        TotalCoverableLines > 0 ? Math.Round((decimal)TotalCoveredLines / TotalCoverableLines * 100, 2) : null;
+    /// <summary>Converts a coverage ratio to a percentage.</summary>
+    private const int PercentageScale = 100;
 
-    /// <summary>
-    /// Gets the overall branch coverage percentage (0-100).
-    /// </summary>
+    /// <summary>The precision used for coverage percentages.</summary>
+    private const int PercentageDecimalPlaces = 2;
+
+    /// <summary>Gets the overall line coverage percentage (0-100).</summary>
+    public decimal? LineCoveragePercent =>
+        TotalCoverableLines > 0 ? Math.Round((decimal)TotalCoveredLines / TotalCoverableLines * PercentageScale, PercentageDecimalPlaces) : null;
+
+    /// <summary>Gets the overall branch coverage percentage (0-100).</summary>
     public decimal? BranchCoveragePercent =>
-        TotalBranches > 0 ? Math.Round((decimal)TotalCoveredBranches / TotalBranches * 100, 2) : null;
+        TotalBranches > 0 ? Math.Round((decimal)TotalCoveredBranches / TotalBranches * PercentageScale, PercentageDecimalPlaces) : null;
 }

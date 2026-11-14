@@ -35,9 +35,9 @@ cd src && dotnet run --project UnitTestMcp.Server
 
 ## Conventions
 
-- .NET 10 only, C# latest (records, pattern matching, file-scoped namespaces, primary constructors, generated regex)
+- .NET 10 and 11, C# latest (records, pattern matching, file-scoped namespaces, primary constructors, generated regex)
 - Central package management via `Directory.Packages.props`
-- StyleCop + Roslynator analyzers enforced
+- StyleSharp, PerformanceSharp and SecuritySharp analyzers enforced using the HyperPDF editor settings
 - TUnit test framework with MTP runner
 - Copyright: Glenn Watson 2026, MIT license
 - All public types must have XML documentation

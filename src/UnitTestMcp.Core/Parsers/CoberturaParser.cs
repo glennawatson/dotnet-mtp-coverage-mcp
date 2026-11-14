@@ -10,9 +10,7 @@ using UnitTestMcp.Core.Models;
 
 namespace UnitTestMcp.Core.Parsers;
 
-/// <summary>
-/// Parses Cobertura XML coverage reports into <see cref="CoverageReport"/> instances.
-/// </summary>
+/// <summary>Parses Cobertura XML coverage reports into <see cref="CoverageReport"/> instances.</summary>
 /// <remarks>
 /// <para>
 /// The Cobertura XML format is the standard output from the
@@ -27,31 +25,37 @@ namespace UnitTestMcp.Core.Parsers;
 /// </remarks>
 public static partial class CoberturaParser
 {
-    /// <summary>
-    /// Comparer for binary search insertion of <see cref="LineCoverage"/> by line number.
-    /// </summary>
+    /// <summary>Comparer for binary search insertion of <see cref="LineCoverage"/> by line number.</summary>
     internal static readonly IComparer<LineCoverage> LineNumberComparer =
-        Comparer<LineCoverage>.Create((a, b) => a.LineNumber.CompareTo(b.LineNumber));
+        Comparer<LineCoverage>.Create(static (a, b) => a.LineNumber.CompareTo(b.LineNumber));
 
-    /// <summary>
-    /// Parses a Cobertura XML file from the given path.
-    /// </summary>
+    /// <summary>XML attribute containing the line coverage rate.</summary>
+    private const string LineRateAttribute = "line-rate";
+
+    /// <summary>XML attribute containing the branch coverage rate.</summary>
+    private const string BranchRateAttribute = "branch-rate";
+
+    /// <summary>XML attribute containing cyclomatic complexity.</summary>
+    private const string ComplexityAttribute = "complexity";
+
+    /// <summary>Precision used for coverage rates.</summary>
+    private const int RateDecimalPlaces = 4;
+
+    /// <summary>Parses a Cobertura XML file from the given path.</summary>
     /// <param name="filePath">The path to the Cobertura XML file.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>A parsed <see cref="CoverageReport"/>.</returns>
-    public static async Task<CoverageReport> ParseFileAsync(string filePath, CancellationToken cancellationToken = default)
+    public static async Task<CoverageReport> ParseFileAsync(string filePath, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
 
-        using var stream = File.OpenRead(filePath);
+        await using var stream = File.OpenRead(filePath);
         var document = await XDocument.LoadAsync(stream, LoadOptions.None, cancellationToken).ConfigureAwait(false);
 
         return ParseDocument(document);
     }
 
-    /// <summary>
-    /// Parses a Cobertura XML document from a string.
-    /// </summary>
+    /// <summary>Parses a Cobertura XML document from a string.</summary>
     /// <param name="xml">The XML content.</param>
     /// <returns>A parsed <see cref="CoverageReport"/>.</returns>
     public static CoverageReport ParseString(string xml)
@@ -62,81 +66,92 @@ public static partial class CoberturaParser
         return ParseDocument(document);
     }
 
-    /// <summary>
-    /// Parses a Cobertura <see cref="XDocument"/> into a <see cref="CoverageReport"/>.
-    /// </summary>
+    /// <summary>Parses a Cobertura <see cref="XDocument"/> into a <see cref="CoverageReport"/>.</summary>
     /// <param name="document">The parsed XML document.</param>
     /// <returns>A parsed <see cref="CoverageReport"/>.</returns>
+    /// <exception cref="InvalidOperationException">The document has no root element.</exception>
     public static CoverageReport ParseDocument(XDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
 
         var root = document.Root ?? throw new InvalidOperationException("XML document has no root element.");
 
-        List<string> sourceDirectories = root.Element("sources") is { } sourcesEl
-            ? [.. sourcesEl.Elements("source").Select(e => e.Value)]
-            : [];
+        List<string> sourceDirectories = [];
+        if (root.Element("sources") is { } sourcesEl)
+        {
+            foreach (var source in sourcesEl.Elements("source"))
+            {
+                sourceDirectories.Add(source.Value);
+            }
+        }
 
         var timestamp = ParseTimestamp(root.Attribute("timestamp")?.Value);
 
-        List<PackageCoverage> packages = root.Element("packages") is { } packagesEl
-            ? [.. packagesEl.Elements("package").Select(ParsePackage)]
-            : [];
+        List<PackageCoverage> parsedPackages = [];
+        if (root.Element("packages") is { } packagesEl)
+        {
+            foreach (var package in packagesEl.Elements("package"))
+            {
+                parsedPackages.Add(ParsePackage(package));
+            }
+        }
 
-        return new CoverageReport(packages, sourceDirectories, timestamp);
+        return new(parsedPackages, sourceDirectories, timestamp);
     }
 
-    /// <summary>
-    /// Gets the compiled regex for parsing branch coverage condition strings.
-    /// </summary>
+    /// <summary>Gets the compiled regex for parsing branch coverage condition strings.</summary>
     /// <returns>A regex matching the (covered/total) pattern in condition-coverage attributes.</returns>
     [GeneratedRegex(@"\((?<covered>\d+)/(?<total>\d+)\)$")]
     internal static partial Regex BranchCoverageRegex();
 
-    /// <summary>
-    /// Parses a package element into a <see cref="PackageCoverage"/>.
-    /// </summary>
+    /// <summary>Parses a package element into a <see cref="PackageCoverage"/>.</summary>
     /// <param name="packageElement">The XML element representing a package.</param>
     /// <returns>The parsed package coverage data.</returns>
     internal static PackageCoverage ParsePackage(XElement packageElement)
     {
         var name = packageElement.Attribute("name")?.Value ?? string.Empty;
-        var lineRate = ParseDecimalAttribute(packageElement, "line-rate");
-        var branchRate = ParseDecimalAttribute(packageElement, "branch-rate");
-        var complexity = ParseDecimalAttribute(packageElement, "complexity");
+        var lineRate = ParseDecimalAttribute(packageElement, LineRateAttribute);
+        var branchRate = ParseDecimalAttribute(packageElement, BranchRateAttribute);
+        var complexity = ParseDecimalAttribute(packageElement, ComplexityAttribute);
 
-        List<ClassCoverage> classes = packageElement.Element("classes") is { } classesEl
-            ? [.. classesEl.Elements("class").Select(ParseClass)]
-            : [];
+        List<ClassCoverage> parsedClasses = [];
+        if (packageElement.Element("classes") is { } classesEl)
+        {
+            foreach (var element in classesEl.Elements("class"))
+            {
+                parsedClasses.Add(ParseClass(element));
+            }
+        }
 
-        return new PackageCoverage(name, lineRate, branchRate, complexity, classes);
+        return new(name, lineRate, branchRate, complexity, parsedClasses);
     }
 
-    /// <summary>
-    /// Parses a class element into a <see cref="ClassCoverage"/>.
-    /// </summary>
+    /// <summary>Parses a class element into a <see cref="ClassCoverage"/>.</summary>
     /// <param name="classElement">The XML element representing a class.</param>
     /// <returns>The parsed class coverage data.</returns>
     internal static ClassCoverage ParseClass(XElement classElement)
     {
         var name = classElement.Attribute("name")?.Value ?? string.Empty;
         var fileName = classElement.Attribute("filename")?.Value ?? string.Empty;
-        var lineRate = ParseDecimalAttribute(classElement, "line-rate");
-        var branchRate = ParseDecimalAttribute(classElement, "branch-rate");
-        var complexity = ParseDecimalAttribute(classElement, "complexity");
+        var lineRate = ParseDecimalAttribute(classElement, LineRateAttribute);
+        var branchRate = ParseDecimalAttribute(classElement, BranchRateAttribute);
+        var complexity = ParseDecimalAttribute(classElement, ComplexityAttribute);
 
         var classLines = ParseLines(classElement.Element("lines"));
 
-        List<MethodCoverage> methods = classElement.Element("methods") is { } methodsEl
-            ? [.. methodsEl.Elements("method").Select(m => ParseMethod(m, classLines))]
-            : [];
+        List<MethodCoverage> parsedMethods = [];
+        if (classElement.Element("methods") is { } methodsEl)
+        {
+            foreach (var method in methodsEl.Elements("method"))
+            {
+                parsedMethods.Add(ParseMethod(method, classLines));
+            }
+        }
 
-        return new ClassCoverage(name, fileName, lineRate, branchRate, complexity, methods, classLines);
+        return new(name, fileName, lineRate, branchRate, complexity, parsedMethods, classLines);
     }
 
-    /// <summary>
-    /// Parses a method element into a <see cref="MethodCoverage"/>.
-    /// </summary>
+    /// <summary>Parses a method element into a <see cref="MethodCoverage"/>.</summary>
     /// <param name="methodElement">The XML element representing a method.</param>
     /// <param name="classLines">The class-level lines to fall back on if the method has none.</param>
     /// <returns>The parsed method coverage data.</returns>
@@ -144,9 +159,9 @@ public static partial class CoberturaParser
     {
         var name = methodElement.Attribute("name")?.Value ?? string.Empty;
         var signature = methodElement.Attribute("signature")?.Value ?? string.Empty;
-        var lineRate = ParseDecimalAttribute(methodElement, "line-rate");
-        var branchRate = ParseDecimalAttribute(methodElement, "branch-rate");
-        var complexity = ParseDecimalAttribute(methodElement, "complexity");
+        var lineRate = ParseDecimalAttribute(methodElement, LineRateAttribute);
+        var branchRate = ParseDecimalAttribute(methodElement, BranchRateAttribute);
+        var complexity = ParseDecimalAttribute(methodElement, ComplexityAttribute);
 
         var methodLines = ParseLines(methodElement.Element("lines"));
 
@@ -156,12 +171,10 @@ public static partial class CoberturaParser
             methodLines = [.. classLines];
         }
 
-        return new MethodCoverage(name, signature, lineRate, branchRate, complexity, methodLines);
+        return new(name, signature, lineRate, branchRate, complexity, methodLines);
     }
 
-    /// <summary>
-    /// Parses line elements from a lines container element.
-    /// </summary>
+    /// <summary>Parses line elements from a lines container element.</summary>
     /// <param name="linesElement">The XML element containing line children, or null.</param>
     /// <returns>A list of parsed line coverage entries, ordered by line number.</returns>
     internal static List<LineCoverage> ParseLines(XElement? linesElement)
@@ -186,9 +199,7 @@ public static partial class CoberturaParser
         return lines;
     }
 
-    /// <summary>
-    /// Parses a single line element into a <see cref="LineCoverage"/>.
-    /// </summary>
+    /// <summary>Parses a single line element into a <see cref="LineCoverage"/>.</summary>
     /// <param name="lineElement">The XML element representing a single line.</param>
     /// <returns>The parsed line coverage data.</returns>
     internal static LineCoverage ParseLine(XElement lineElement)
@@ -218,12 +229,10 @@ public static partial class CoberturaParser
 
         var status = DetermineLineStatus(hits, isBranch, coveredBranches, totalBranches);
 
-        return new LineCoverage(number, hits, status, isBranch, coveredBranches, totalBranches);
+        return new(number, hits, status, isBranch, coveredBranches, totalBranches);
     }
 
-    /// <summary>
-    /// Determines the visit status for a line based on its hits and branch information.
-    /// </summary>
+    /// <summary>Determines the visit status for a line based on its hits and branch information.</summary>
     /// <param name="hits">The number of times the line was executed.</param>
     /// <param name="isBranch">Whether the line contains a branch point.</param>
     /// <param name="coveredBranches">The number of branches covered, if applicable.</param>
@@ -236,17 +245,10 @@ public static partial class CoberturaParser
             return LineVisitStatus.NotCovered;
         }
 
-        if (isBranch && coveredBranches is { } cb && totalBranches is { } tb && cb < tb)
-        {
-            return LineVisitStatus.PartiallyCovered;
-        }
-
-        return LineVisitStatus.Covered;
+        return isBranch && coveredBranches is { } cb && totalBranches is { } tb && cb < tb ? LineVisitStatus.PartiallyCovered : LineVisitStatus.Covered;
     }
 
-    /// <summary>
-    /// Parses a decimal attribute value from a Cobertura XML element.
-    /// </summary>
+    /// <summary>Parses a decimal attribute value from a Cobertura XML element.</summary>
     /// <param name="element">The XML element containing the attribute.</param>
     /// <param name="attributeName">The name of the attribute to parse.</param>
     /// <returns>The parsed decimal value, or null if the attribute is missing, NaN, or unparseable.</returns>
@@ -264,14 +266,19 @@ public static partial class CoberturaParser
             value = value.Replace(',', '.');
         }
 
-        return decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result)
-            ? Math.Round(result, 4, MidpointRounding.AwayFromZero)
+        return decimal.TryParse(
+            value,
+            NumberStyles.Float,
+            CultureInfo.InvariantCulture,
+            out var result)
+            ? Math.Round(
+            result,
+            RateDecimalPlaces,
+            MidpointRounding.AwayFromZero)
             : null;
     }
 
-    /// <summary>
-    /// Parses a Unix epoch timestamp from the Cobertura root element.
-    /// </summary>
+    /// <summary>Parses a Unix epoch timestamp from the Cobertura root element.</summary>
     /// <param name="value">The timestamp attribute value, or null.</param>
     /// <returns>The parsed <see cref="DateTimeOffset"/>, or null if the value is missing or unparseable.</returns>
     internal static DateTimeOffset? ParseTimestamp(string? value)
@@ -282,7 +289,10 @@ public static partial class CoberturaParser
         }
 
         // Cobertura timestamps are Unix epoch in seconds
-        return long.TryParse(value, CultureInfo.InvariantCulture, out var epoch)
+        return long.TryParse(
+            value,
+            CultureInfo.InvariantCulture,
+            out var epoch)
             ? DateTimeOffset.FromUnixTimeSeconds(epoch)
             : null;
     }

@@ -6,12 +6,11 @@ using UnitTestMcp.Core.Models;
 
 namespace UnitTestMcp.Core.Services;
 
-/// <summary>
-/// Missed coverage information for a specific source file.
-/// </summary>
+/// <summary>Missed coverage information for a specific source file.</summary>
 /// <param name="FilePath">The source file path.</param>
 /// <param name="MissedLines">Lines that were not covered.</param>
 /// <param name="PartiallyMissedBranches">Lines with partially covered branches.</param>
+[DebuggerDisplay("{FilePath}: {MissedLines.Count} missed lines")]
 public sealed record FileMissedCoverage(
     string FilePath,
     IReadOnlyList<LineCoverage> MissedLines,

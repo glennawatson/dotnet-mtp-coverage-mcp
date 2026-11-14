@@ -12,15 +12,20 @@ using UnitTestMcp.Core.Services;
 
 namespace UnitTestMcp.Server.Tools;
 
-/// <summary>
-/// MCP tools for querying code coverage data from Cobertura XML reports.
-/// </summary>
+/// <summary>MCP tools for querying code coverage data from Cobertura XML reports.</summary>
 [McpServerToolType]
 public static class CoverageTools
 {
-    /// <summary>
-    /// Gets missed lines and branches for a specific source file.
-    /// </summary>
+    /// <summary>The initial capacity for a file coverage section.</summary>
+    private const int FileReportCapacity = 256;
+
+    /// <summary>The estimated characters needed for a line number.</summary>
+    private const int CharactersPerLine = 4;
+
+    /// <summary>Converts coverage ratios to percentages.</summary>
+    private const int PercentageScale = 100;
+
+    /// <summary>Gets missed lines and branches for a specific source file.</summary>
     /// <param name="coverageService">The coverage service.</param>
     /// <param name="coberturaFilePath">Path to the Cobertura XML coverage report.</param>
     /// <param name="sourceFilePath">Path to the source file to query.</param>
@@ -42,9 +47,7 @@ public static class CoverageTools
         return FormatFileMissedCoverage(missed);
     }
 
-    /// <summary>
-    /// Gets overall coverage for a specific class.
-    /// </summary>
+    /// <summary>Gets overall coverage for a specific class.</summary>
     /// <param name="coverageService">The coverage service.</param>
     /// <param name="coberturaFilePath">Path to the Cobertura XML coverage report.</param>
     /// <param name="className">The fully qualified or short class name.</param>
@@ -68,9 +71,7 @@ public static class CoverageTools
             : FormatClassCoverage(classCoverage);
     }
 
-    /// <summary>
-    /// Gets overall coverage for a specific method.
-    /// </summary>
+    /// <summary>Gets overall coverage for a specific method.</summary>
     /// <param name="coverageService">The coverage service.</param>
     /// <param name="coberturaFilePath">Path to the Cobertura XML coverage report.</param>
     /// <param name="className">The class name containing the method.</param>
@@ -96,9 +97,7 @@ public static class CoverageTools
             : FormatMethodCoverage(method);
     }
 
-    /// <summary>
-    /// Gets overall coverage for a specific project/package.
-    /// </summary>
+    /// <summary>Gets overall coverage for a specific project/package.</summary>
     /// <param name="coverageService">The coverage service.</param>
     /// <param name="coberturaFilePath">Path to the Cobertura XML coverage report.</param>
     /// <param name="projectName">The project/package name.</param>
@@ -122,9 +121,7 @@ public static class CoverageTools
             : FormatProjectCoverage(project);
     }
 
-    /// <summary>
-    /// Gets overall coverage for a solution by discovering and merging all Cobertura reports.
-    /// </summary>
+    /// <summary>Gets overall coverage for a solution by discovering and merging all Cobertura reports.</summary>
     /// <param name="coverageService">The coverage service.</param>
     /// <param name="solutionPath">Path to the solution directory or .sln file.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
@@ -145,15 +142,18 @@ public static class CoverageTools
             return "No coverage data found. Ensure tests have been run with code coverage collection enabled.";
         }
 
-        var projectLines = string.Join(
-            Environment.NewLine,
-            report.Packages.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).Select(p =>
-                $$"""
+        var projectSections = new List<string>(report.Packages.Count);
+        foreach (var p in SortByName(report.Packages, static p => p.Name))
+        {
+            projectSections.Add($$"""
                 ### {{p.Name}}
                 - Line Coverage: {{FormatPercent(p.LineCoverageRate)}} ({{p.CoveredLineCount}}/{{p.CoverableLineCount}})
                 - Branch Coverage: {{FormatPercent(p.BranchCoverageRate)}}
                 - Classes: {{p.Classes.Count}}
-                """));
+                """);
+        }
+
+        var projectLines = string.Join(Environment.NewLine, projectSections);
 
         return $$"""
             # Solution Coverage Summary
@@ -169,9 +169,7 @@ public static class CoverageTools
             """;
     }
 
-    /// <summary>
-    /// Gets a report of all missed lines and branches across an entire solution.
-    /// </summary>
+    /// <summary>Gets a report of all missed lines and branches across an entire solution.</summary>
     /// <param name="coverageService">The coverage service.</param>
     /// <param name="solutionPath">Path to the solution directory or .sln file.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
@@ -193,7 +191,13 @@ public static class CoverageTools
         }
 
         var missed = coverageService.GetSolutionMissedCoverage(report);
-        var fileReportLines = string.Join(Environment.NewLine, missed.FileReports.Select(FormatFileReport));
+        var fileSections = new List<string>(missed.FileReports.Count);
+        foreach (var file in missed.FileReports)
+        {
+            fileSections.Add(FormatFileReport(file));
+        }
+
+        var fileReportLines = string.Join(Environment.NewLine, fileSections);
 
         return $$"""
             # Solution Missed Coverage Report
@@ -206,41 +210,37 @@ public static class CoverageTools
             """;
     }
 
-    /// <summary>
-    /// Formats a single file's missed coverage into a markdown section.
-    /// </summary>
+    /// <summary>Formats a single file's missed coverage into a markdown section.</summary>
     /// <param name="fileReport">The file missed coverage data.</param>
     /// <returns>A markdown-formatted string for this file.</returns>
     private static string FormatFileReport(FileMissedCoverage fileReport)
     {
-        var sb = new StringBuilder(256);
-        sb.AppendLine($"## {fileReport.FilePath}");
+        var sb = new StringBuilder(FileReportCapacity);
+        _ = sb.AppendLine($"## {fileReport.FilePath}");
 
         if (fileReport.MissedLines.Count > 0)
         {
-            var ranges = CompactLineRanges(fileReport.MissedLines.Select(l => l.LineNumber).ToList());
-            sb.AppendLine()
+            var ranges = CompactLineRanges(fileReport.MissedLines);
+            _ = sb.AppendLine()
               .AppendLine($"**Missed Lines** ({fileReport.MissedLines.Count}):")
               .AppendLine($"  Lines: {ranges}");
         }
 
         if (fileReport.PartiallyMissedBranches.Count > 0)
         {
-            sb.AppendLine()
+            _ = sb.AppendLine()
               .AppendLine($"**Partially Covered Branches** ({fileReport.PartiallyMissedBranches.Count}):");
 
             foreach (var branch in fileReport.PartiallyMissedBranches)
             {
-                sb.AppendLine($"  Line {branch.LineNumber}: {branch.CoveredBranches}/{branch.TotalBranches} branches covered");
+                _ = sb.AppendLine($"  Line {branch.LineNumber}: {branch.CoveredBranches}/{branch.TotalBranches} branches covered");
             }
         }
 
         return sb.ToString();
     }
 
-    /// <summary>
-    /// Formats missed coverage information for a specific file into a markdown string.
-    /// </summary>
+    /// <summary>Formats missed coverage information for a specific file into a markdown string.</summary>
     /// <param name="missed">The missed coverage data for the file.</param>
     /// <returns>A markdown-formatted string describing the missed coverage.</returns>
     private static string FormatFileMissedCoverage(FileMissedCoverage missed)
@@ -257,12 +257,16 @@ public static class CoverageTools
         var missedSection = missed.MissedLines.Count > 0
             ? $$"""
                 ## Missed Lines ({{missed.MissedLines.Count}})
-                Lines: {{CompactLineRanges(missed.MissedLines.Select(l => l.LineNumber).ToList())}}
+                Lines: {{CompactLineRanges(missed.MissedLines)}}
                 """
             : string.Empty;
 
-        var branchLines = missed.PartiallyMissedBranches.Select(b =>
-            $"- Line {b.LineNumber}: {b.CoveredBranches}/{b.TotalBranches} branches covered (hits: {b.Hits})");
+        var branchLines = new List<string>(missed.PartiallyMissedBranches.Count);
+        foreach (var branch in missed.PartiallyMissedBranches)
+        {
+            branchLines.Add($"- Line {branch.LineNumber}: {branch.CoveredBranches}/{branch.TotalBranches} branches covered (hits: {branch.Hits})");
+        }
+
         var branchSection = missed.PartiallyMissedBranches.Count > 0
             ? $"""
                 ## Partially Covered Branches ({missed.PartiallyMissedBranches.Count})
@@ -279,17 +283,21 @@ public static class CoverageTools
             """;
     }
 
-    /// <summary>
-    /// Formats class coverage into a markdown string.
-    /// </summary>
+    /// <summary>Formats class coverage into a markdown string.</summary>
     /// <param name="c">The class coverage data.</param>
     /// <returns>A markdown-formatted string describing the class coverage.</returns>
     private static string FormatClassCoverage(ClassCoverage c)
     {
-        var methodLines = string.Join(
-            Environment.NewLine,
-            c.Methods.OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase).Select(m =>
-                $"- **{m.Name}**: Line {FormatPercent(m.LineCoverageRate)}, Branch {FormatPercent(m.BranchCoverageRate)}, CRAP {m.CrapScore?.ToString("F1") ?? "N/A"}"));
+        var methodSections = new List<string>(c.Methods.Count);
+        foreach (var method in SortByName(c.Methods, static m => m.Name))
+        {
+            var lineRate = FormatPercent(method.LineCoverageRate);
+            var branchRate = FormatPercent(method.BranchCoverageRate);
+            var crapScore = method.CrapScore?.ToString("F1") ?? "N/A";
+            methodSections.Add($"- **{method.Name}**: Line {lineRate}, Branch {branchRate}, CRAP {crapScore}");
+        }
+
+        var methodLines = string.Join(Environment.NewLine, methodSections);
 
         return $$"""
             # Class Coverage: {{c.Name}}
@@ -306,14 +314,19 @@ public static class CoverageTools
             """;
     }
 
-    /// <summary>
-    /// Formats method coverage into a markdown string.
-    /// </summary>
+    /// <summary>Formats method coverage into a markdown string.</summary>
     /// <param name="m">The method coverage data.</param>
     /// <returns>A markdown-formatted string describing the method coverage.</returns>
     private static string FormatMethodCoverage(MethodCoverage m)
     {
-        var missedLines = m.Lines.Where(l => l.Status is LineVisitStatus.NotCovered).Select(l => l.LineNumber).ToList();
+        var missedLines = new List<LineCoverage>();
+        foreach (var line in m.Lines)
+        {
+            if (line.Status is LineVisitStatus.NotCovered)
+            {
+                missedLines.Add(line);
+            }
+        }
 
         var missedSection = missedLines.Count > 0
             ? $$"""
@@ -334,17 +347,20 @@ public static class CoverageTools
             """;
     }
 
-    /// <summary>
-    /// Formats project/package coverage into a markdown string.
-    /// </summary>
+    /// <summary>Formats project/package coverage into a markdown string.</summary>
     /// <param name="p">The package coverage data.</param>
     /// <returns>A markdown-formatted string describing the project coverage.</returns>
     private static string FormatProjectCoverage(PackageCoverage p)
     {
-        var classLines = string.Join(
-            Environment.NewLine,
-            p.Classes.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).Select(c =>
-                $"- **{c.ShortName}**: Line {FormatPercent(c.LineCoverageRate)}, Branch {FormatPercent(c.BranchCoverageRate)}, Missed {c.MissedLineCount} lines"));
+        var classSections = new List<string>(p.Classes.Count);
+        foreach (var item in SortByName(p.Classes, static c => c.Name))
+        {
+            var lineRate = FormatPercent(item.LineCoverageRate);
+            var branchRate = FormatPercent(item.BranchCoverageRate);
+            classSections.Add($"- **{item.ShortName}**: Line {lineRate}, Branch {branchRate}, Missed {item.MissedLineCount} lines");
+        }
+
+        var classLines = string.Join(Environment.NewLine, classSections);
 
         return $$"""
             # Project Coverage: {{p.Name}}
@@ -360,40 +376,63 @@ public static class CoverageTools
             """;
     }
 
-    /// <summary>
-    /// Formats a decimal coverage rate (0.0-1.0) as a percentage string.
-    /// </summary>
+    /// <summary>Formats a decimal coverage rate (0.0-1.0) as a percentage string.</summary>
     /// <param name="rate">The coverage rate, or null.</param>
     /// <returns>A formatted percentage string like "85.71%" or "N/A".</returns>
     private static string FormatPercent(decimal? rate) =>
-        rate.HasValue ? $"{rate.Value * 100:F2}%" : "N/A";
+        rate.HasValue ? $"{rate.Value * PercentageScale:F2}%" : "N/A";
 
-    /// <summary>
-    /// Compacts a list of line numbers into human-readable ranges (e.g. "10-15, 20, 25-30").
-    /// </summary>
+    /// <summary>Sorts coverage entries by name while preserving the order of equal names.</summary>
+    /// <typeparam name="T">The coverage entry type.</typeparam>
+    /// <param name="entries">The entries to sort.</param>
+    /// <param name="getName">Gets an entry's name.</param>
+    /// <returns>The entries in stable name order.</returns>
+    private static List<T> SortByName<T>(IReadOnlyList<T> entries, Func<T, string> getName)
+    {
+        var indexed = new List<(string Name, int Index, T Value)>(entries.Count);
+        for (var index = 0; index < entries.Count; index++)
+        {
+            indexed.Add((getName(entries[index]), index, entries[index]));
+        }
+
+        indexed.Sort(static (a, b) =>
+        {
+            var comparison = StringComparer.OrdinalIgnoreCase.Compare(a.Name, b.Name);
+            return comparison == 0 ? a.Index.CompareTo(b.Index) : comparison;
+        });
+        var result = new List<T>(entries.Count);
+        foreach (var entry in indexed)
+        {
+            result.Add(entry.Value);
+        }
+
+        return result;
+    }
+
+    /// <summary>Compacts a list of line numbers into human-readable ranges (e.g. "10-15, 20, 25-30").</summary>
     /// <param name="lines">The sorted line numbers to compact.</param>
     /// <returns>A compact string representation of the line ranges.</returns>
-    private static string CompactLineRanges(IReadOnlyList<int> lines)
+    private static string CompactLineRanges(IReadOnlyList<LineCoverage> lines)
     {
         if (lines.Count == 0)
         {
             return "none";
         }
 
-        var sb = new StringBuilder(lines.Count * 4);
-        var start = lines[0];
+        var sb = new StringBuilder(lines.Count * CharactersPerLine);
+        var start = lines[0].LineNumber;
         var end = start;
 
         for (var i = 1; i < lines.Count; i++)
         {
-            if (lines[i] == end + 1)
+            if (lines[i].LineNumber == end + 1)
             {
-                end = lines[i];
+                end = lines[i].LineNumber;
             }
             else
             {
                 AppendRange(sb, start, end);
-                start = lines[i];
+                start = lines[i].LineNumber;
                 end = start;
             }
         }
@@ -405,13 +444,13 @@ public static class CoverageTools
         {
             if (builder.Length > 0)
             {
-                builder.Append(", ");
+                _ = builder.Append(", ");
             }
 
-            builder.Append(rangeStart);
+            _ = builder.Append(rangeStart);
             if (rangeStart != rangeEnd)
             {
-                builder.Append('-').Append(rangeEnd);
+                _ = builder.Append('-').Append(rangeEnd);
             }
         }
     }

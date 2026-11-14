@@ -4,13 +4,7 @@
 
 namespace UnitTestMcp.Core.Models;
 
-/// <summary>
-/// Coverage information for a single class.
-/// </summary>
-/// <remarks>
-/// Coverage model concepts adapted from ReportGenerator by Daniel Palme.
-/// See https://github.com/danielpalme/ReportGenerator.
-/// </remarks>
+/// <summary>Coverage information for a single class.</summary>
 /// <param name="Name">The fully qualified class name.</param>
 /// <param name="FileName">The source file path for this class.</param>
 /// <param name="LineCoverageRate">Line coverage as a decimal (0.0 to 1.0), or null if unavailable.</param>
@@ -18,6 +12,11 @@ namespace UnitTestMcp.Core.Models;
 /// <param name="Complexity">The total cyclomatic complexity, if available.</param>
 /// <param name="Methods">The method coverage entries for this class.</param>
 /// <param name="Lines">All line coverage entries for this class.</param>
+/// <remarks>
+/// Coverage model concepts adapted from ReportGenerator by Daniel Palme.
+/// See https://github.com/danielpalme/ReportGenerator.
+/// </remarks>
+[DebuggerDisplay("{Name}: {CoveredLineCount}/{CoverableLineCount} lines")]
 public sealed record ClassCoverage(
     string Name,
     string FileName,
@@ -27,52 +26,34 @@ public sealed record ClassCoverage(
     IReadOnlyList<MethodCoverage> Methods,
     IReadOnlyList<LineCoverage> Lines)
 {
-    /// <summary>
-    /// Pre-computed line and branch coverage counts, calculated once at construction time.
-    /// </summary>
-    private readonly (int CoveredLines, int CoverableLines, int MissedLines, int TotalBranches, int CoveredBranches) _counts = ComputeCounts(Lines);
+    /// <summary>Pre-computed line and branch coverage counts, calculated once at construction time.</summary>
+    private readonly CoverageCounts _counts = ComputeCounts(Lines);
 
-    /// <summary>
-    /// Gets the short class name without namespace.
-    /// </summary>
+    /// <summary>Gets the short class name without namespace.</summary>
     public string ShortName { get; } = Name.LastIndexOf('.') is var idx and >= 0 ? Name[(idx + 1)..] : Name;
 
-    /// <summary>
-    /// Gets the count of covered lines in this class.
-    /// </summary>
+    /// <summary>Gets the count of covered lines in this class.</summary>
     public int CoveredLineCount => _counts.CoveredLines;
 
-    /// <summary>
-    /// Gets the count of coverable lines in this class.
-    /// </summary>
+    /// <summary>Gets the count of coverable lines in this class.</summary>
     public int CoverableLineCount => _counts.CoverableLines;
 
-    /// <summary>
-    /// Gets the count of missed (not covered) lines in this class.
-    /// </summary>
+    /// <summary>Gets the count of missed (not covered) lines in this class.</summary>
     public int MissedLineCount => _counts.MissedLines;
 
-    /// <summary>
-    /// Gets the total branch count across all lines.
-    /// </summary>
+    /// <summary>Gets the total branch count across all lines.</summary>
     public int TotalBranchCount => _counts.TotalBranches;
 
-    /// <summary>
-    /// Gets the covered branch count across all lines.
-    /// </summary>
+    /// <summary>Gets the covered branch count across all lines.</summary>
     public int CoveredBranchCount => _counts.CoveredBranches;
 
-    /// <summary>
-    /// Gets the missed branch count across all lines.
-    /// </summary>
+    /// <summary>Gets the missed branch count across all lines.</summary>
     public int MissedBranchCount => _counts.TotalBranches - _counts.CoveredBranches;
 
-    /// <summary>
-    /// Computes all line and branch coverage counts in a single pass over the lines collection.
-    /// </summary>
+    /// <summary>Computes all line and branch coverage counts in a single pass over the lines collection.</summary>
     /// <param name="lines">The line coverage entries to analyze.</param>
-    /// <returns>A tuple containing the pre-computed coverage counts.</returns>
-    private static (int CoveredLines, int CoverableLines, int MissedLines, int TotalBranches, int CoveredBranches) ComputeCounts(IReadOnlyList<LineCoverage> lines)
+    /// <returns>The cached line and branch counts.</returns>
+    private static CoverageCounts ComputeCounts(IReadOnlyList<LineCoverage> lines)
     {
         var coveredLines = 0;
         var coverableLines = 0;
@@ -107,6 +88,6 @@ public sealed record ClassCoverage(
             }
         }
 
-        return (coveredLines, coverableLines, missedLines, totalBranches, coveredBranches);
+        return new(coveredLines, coverableLines, missedLines, totalBranches, coveredBranches);
     }
 }

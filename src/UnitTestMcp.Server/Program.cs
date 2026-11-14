@@ -6,19 +6,18 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-using ModelContextProtocol.Server;
-
 using UnitTestMcp.Core.Services;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Logging.AddConsole(options =>
+_ = builder.Logging.AddConsole(static options =>
 {
     options.LogToStandardErrorThreshold = LogLevel.Trace;
 });
 
-builder.Services.AddSingleton<ICoverageService, CoverageService>();
-builder.Services
+_ = builder.Services.AddSingleton<ICoverageService, CoverageService>();
+
+_ = builder.Services
     .AddMcpServer()
     .WithStdioServerTransport()
     .WithToolsFromAssembly();

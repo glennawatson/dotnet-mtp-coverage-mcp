@@ -11,207 +11,181 @@ using UnitTestMcp.Core.Services;
 
 namespace UnitTestMcp.Tests;
 
-/// <summary>
-/// Tests for the <see cref="CoverageService"/>.
-/// </summary>
+/// <summary>Tests for the <see cref="CoverageService"/>.</summary>
 public class CoverageServiceTests
 {
-    /// <summary>
-    /// The coverage service under test.
-    /// </summary>
+    /// <summary>The calculator class in the sample report.</summary>
+    private const string CalculatorClassName = "MyProject.Calculator";
+
+    /// <summary>A name absent from the sample report.</summary>
+    private const string MissingEntryName = "NonExistent";
+
+    /// <summary>The coverage service under test.</summary>
     private readonly CoverageService _service = new();
 
-    /// <summary>
-    /// Gets the path to the sample Cobertura XML test fixture.
-    /// </summary>
+    /// <summary>Gets the path to the sample Cobertura XML test fixture.</summary>
     private static string TestDataPath => Path.Combine(AppContext.BaseDirectory, "TestData", "sample-coverage.cobertura.xml");
 
-    /// <summary>
-    /// Verifies GetMissedCoverageForFile returns missed lines for Calculator.cs.
-    /// </summary>
+    /// <summary>Verifies GetMissedCoverageForFile returns missed lines for Calculator.cs.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task GetMissedCoverageForFile_ReturnsCorrectMissedLines()
     {
-        var report = await CoberturaParser.ParseFileAsync(TestDataPath);
+        var report = await CoberturaParser.ParseFileAsync(TestDataPath, CancellationToken.None);
         var missed = _service.GetMissedCoverageForFile(report, "Calculator.cs");
 
         // Lines 21 and 32 have hits=0 -> NotCovered
-        await Assert.That(missed.MissedLines).Count().IsEqualTo(2);
-        await Assert.That(missed.MissedLines[0].LineNumber).IsEqualTo(21);
-        await Assert.That(missed.MissedLines[1].LineNumber).IsEqualTo(32);
+        await Assert.That(missed.MissedLines).Count().IsEqualTo(expected: 2);
+        await Assert.That(value: missed.MissedLines[0].LineNumber).IsEqualTo(expected: 21);
+        await Assert.That(value: missed.MissedLines[1].LineNumber).IsEqualTo(expected: 32);
     }
 
-    /// <summary>
-    /// Verifies GetMissedCoverageForFile returns partially covered branches.
-    /// </summary>
+    /// <summary>Verifies GetMissedCoverageForFile returns partially covered branches.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task GetMissedCoverageForFile_ReturnsPartialBranches()
     {
-        var report = await CoberturaParser.ParseFileAsync(TestDataPath);
+        var report = await CoberturaParser.ParseFileAsync(TestDataPath, CancellationToken.None);
         var missed = _service.GetMissedCoverageForFile(report, "Calculator.cs");
 
         // Lines 20 and 30 have partial branch coverage
-        await Assert.That(missed.PartiallyMissedBranches).Count().IsEqualTo(2);
+        await Assert.That(missed.PartiallyMissedBranches).Count().IsEqualTo(expected: 2);
     }
 
-    /// <summary>
-    /// Verifies GetClassCoverage finds a class by fully qualified name.
-    /// </summary>
+    /// <summary>Verifies GetClassCoverage finds a class by fully qualified name.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task GetClassCoverage_ByFullName_FindsClass()
     {
-        var report = await CoberturaParser.ParseFileAsync(TestDataPath);
-        var classCoverage = _service.GetClassCoverage(report, "MyProject.Calculator");
+        var report = await CoberturaParser.ParseFileAsync(TestDataPath, CancellationToken.None);
+        var classCoverage = _service.GetClassCoverage(report, CalculatorClassName);
 
         await Assert.That(classCoverage).IsNotNull();
-        await Assert.That(classCoverage!.Name).IsEqualTo("MyProject.Calculator");
-        await Assert.That(classCoverage.Methods).Count().IsEqualTo(3);
+        await Assert.That(classCoverage!.Name).IsEqualTo(CalculatorClassName);
+        await Assert.That(classCoverage.Methods).Count().IsEqualTo(expected: 3);
     }
 
-    /// <summary>
-    /// Verifies GetClassCoverage finds a class by short name.
-    /// </summary>
+    /// <summary>Verifies GetClassCoverage finds a class by short name.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task GetClassCoverage_ByShortName_FindsClass()
     {
-        var report = await CoberturaParser.ParseFileAsync(TestDataPath);
+        var report = await CoberturaParser.ParseFileAsync(TestDataPath, CancellationToken.None);
         var classCoverage = _service.GetClassCoverage(report, "Calculator");
 
         await Assert.That(classCoverage).IsNotNull();
-        await Assert.That(classCoverage!.Name).IsEqualTo("MyProject.Calculator");
+        await Assert.That(classCoverage!.Name).IsEqualTo(CalculatorClassName);
     }
 
-    /// <summary>
-    /// Verifies GetClassCoverage returns null for non-existent class.
-    /// </summary>
+    /// <summary>Verifies GetClassCoverage returns null for non-existent class.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task GetClassCoverage_NotFound_ReturnsNull()
     {
-        var report = await CoberturaParser.ParseFileAsync(TestDataPath);
-        var classCoverage = _service.GetClassCoverage(report, "NonExistent");
+        var report = await CoberturaParser.ParseFileAsync(TestDataPath, CancellationToken.None);
+        var classCoverage = _service.GetClassCoverage(report, MissingEntryName);
 
         await Assert.That(classCoverage).IsNull();
     }
 
-    /// <summary>
-    /// Verifies GetMethodCoverage finds a method by class and method name.
-    /// </summary>
+    /// <summary>Verifies GetMethodCoverage finds a method by class and method name.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task GetMethodCoverage_FindsMethod()
     {
-        var report = await CoberturaParser.ParseFileAsync(TestDataPath);
-        var method = _service.GetMethodCoverage(report, "MyProject.Calculator", "Add");
+        var report = await CoberturaParser.ParseFileAsync(TestDataPath, CancellationToken.None);
+        var method = _service.GetMethodCoverage(report, CalculatorClassName, "Add");
 
         await Assert.That(method).IsNotNull();
         await Assert.That(method!.Name).IsEqualTo("Add");
-        await Assert.That(method.LineCoverageRate).IsEqualTo(1m);
+        await Assert.That(method.LineCoverageRate).IsEqualTo(expected: 1M);
     }
 
-    /// <summary>
-    /// Verifies GetMethodCoverage returns null for non-existent method.
-    /// </summary>
+    /// <summary>Verifies GetMethodCoverage returns null for non-existent method.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task GetMethodCoverage_NotFound_ReturnsNull()
     {
-        var report = await CoberturaParser.ParseFileAsync(TestDataPath);
-        var method = _service.GetMethodCoverage(report, "MyProject.Calculator", "NonExistent");
+        var report = await CoberturaParser.ParseFileAsync(TestDataPath, CancellationToken.None);
+        var method = _service.GetMethodCoverage(report, CalculatorClassName, MissingEntryName);
 
         await Assert.That(method).IsNull();
     }
 
-    /// <summary>
-    /// Verifies GetProjectCoverage finds a package by name.
-    /// </summary>
+    /// <summary>Verifies GetProjectCoverage finds a package by name.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task GetProjectCoverage_FindsProject()
     {
-        var report = await CoberturaParser.ParseFileAsync(TestDataPath);
+        var report = await CoberturaParser.ParseFileAsync(TestDataPath, CancellationToken.None);
         var project = _service.GetProjectCoverage(report, "MyProject");
 
         await Assert.That(project).IsNotNull();
         await Assert.That(project!.Name).IsEqualTo("MyProject");
-        await Assert.That(project.Classes).Count().IsEqualTo(2);
+        await Assert.That(project.Classes).Count().IsEqualTo(expected: 2);
     }
 
-    /// <summary>
-    /// Verifies GetProjectCoverage returns null for non-existent project.
-    /// </summary>
+    /// <summary>Verifies GetProjectCoverage returns null for non-existent project.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task GetProjectCoverage_NotFound_ReturnsNull()
     {
-        var report = await CoberturaParser.ParseFileAsync(TestDataPath);
-        var project = _service.GetProjectCoverage(report, "NonExistent");
+        var report = await CoberturaParser.ParseFileAsync(TestDataPath, CancellationToken.None);
+        var project = _service.GetProjectCoverage(report, MissingEntryName);
 
         await Assert.That(project).IsNull();
     }
 
-    /// <summary>
-    /// Verifies GetSolutionMissedCoverage provides an aggregate report.
-    /// </summary>
+    /// <summary>Verifies GetSolutionMissedCoverage provides an aggregate report.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task GetSolutionMissedCoverage_ReturnsAggregate()
     {
-        var report = await CoberturaParser.ParseFileAsync(TestDataPath);
+        var report = await CoberturaParser.ParseFileAsync(TestDataPath, CancellationToken.None);
         var missed = _service.GetSolutionMissedCoverage(report);
 
-        await Assert.That(missed.TotalCoverableLines).IsGreaterThan(0);
-        await Assert.That(missed.TotalCoveredLines).IsGreaterThan(0);
-        await Assert.That(missed.FileReports.Count).IsGreaterThan(0);
+        await Assert.That(missed.TotalCoverableLines).IsGreaterThan(minimum: 0);
+        await Assert.That(missed.TotalCoveredLines).IsGreaterThan(minimum: 0);
+        await Assert.That(missed.FileReports.Count).IsGreaterThan(minimum: 0);
     }
 
-    /// <summary>
-    /// Verifies that ClassCoverage.MissedLineCount computes correctly.
-    /// </summary>
+    /// <summary>Verifies that ClassCoverage.MissedLineCount computes correctly.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task ClassCoverage_MissedLineCount_IsCorrect()
     {
-        var report = await CoberturaParser.ParseFileAsync(TestDataPath);
-        var calculator = report.AllClasses.First(c => c.Name == "MyProject.Calculator");
+        var report = await CoberturaParser.ParseFileAsync(TestDataPath, CancellationToken.None);
+        var calculator = report.AllClasses.First(static c => c.Name == CalculatorClassName);
 
         // Calculator has 10 lines total, lines 21 and 32 missed
-        await Assert.That(calculator.MissedLineCount).IsEqualTo(2);
+        await Assert.That(calculator.MissedLineCount).IsEqualTo(expected: 2);
     }
 
-    /// <summary>
-    /// Verifies that MethodCoverage.CrapScore computes correctly.
-    /// </summary>
+    /// <summary>Verifies that MethodCoverage.CrapScore computes correctly.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task MethodCoverage_CrapScore_ComputesCorrectly()
     {
-        var report = await CoberturaParser.ParseFileAsync(TestDataPath);
-        var calculator = report.AllClasses.First(c => c.Name == "MyProject.Calculator");
-        var divideMethod = calculator.Methods.First(m => m.Name == "Divide");
+        var report = await CoberturaParser.ParseFileAsync(TestDataPath, CancellationToken.None);
+        var calculator = report.AllClasses.First(static c => c.Name == CalculatorClassName);
+        var divideMethod = calculator.Methods.First(static m => m.Name == "Divide");
 
         // Divide: CC=2, coverage=0.75, uncovered=0.25
         // CRAP = 2^2 * 0.25^3 + 2 = 4 * 0.015625 + 2 = 2.0625
         await Assert.That(divideMethod.CrapScore).IsNotNull();
-        await Assert.That(divideMethod.CrapScore!.Value).IsGreaterThan(2m);
+        await Assert.That(divideMethod.CrapScore!.Value).IsGreaterThan(minimum: 2M);
     }
 
-    /// <summary>
-    /// Verifies solution-level coverage rates compute correctly.
-    /// </summary>
+    /// <summary>Verifies solution-level coverage rates compute correctly.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task CoverageReport_SolutionRates_AreValid()
     {
-        var report = await CoberturaParser.ParseFileAsync(TestDataPath);
+        var report = await CoberturaParser.ParseFileAsync(TestDataPath, CancellationToken.None);
 
         await Assert.That(report.LineCoverageRate).IsNotNull();
-        await Assert.That(report.LineCoverageRate!.Value).IsGreaterThan(0m);
-        await Assert.That(report.LineCoverageRate!.Value).IsLessThanOrEqualTo(1m);
+        await Assert.That(report.LineCoverageRate!.Value).IsGreaterThan(minimum: 0M);
+        await Assert.That(report.LineCoverageRate!.Value).IsLessThanOrEqualTo(maximum: 1M);
     }
 
     /// <summary>
@@ -271,26 +245,24 @@ public class CoverageServiceTests
         var merged = CoverageService.MergeReports([reportA, reportB]);
 
         // All 3 lines should be covered after merge
-        await Assert.That(merged.CoverableLineCount).IsEqualTo(3);
-        await Assert.That(merged.CoveredLineCount).IsEqualTo(3);
-        await Assert.That(merged.MissedLineCount).IsEqualTo(0);
+        await Assert.That(merged.CoverableLineCount).IsEqualTo(expected: 3);
+        await Assert.That(merged.CoveredLineCount).IsEqualTo(expected: 3);
+        await Assert.That(merged.MissedLineCount).IsEqualTo(expected: 0);
 
         // Verify the package was merged into one
-        await Assert.That(merged.Packages).Count().IsEqualTo(1);
-        await Assert.That(merged.Packages[0].Name).IsEqualTo("Lib");
-        await Assert.That(merged.Packages[0].Classes).Count().IsEqualTo(1);
+        await Assert.That(merged.Packages).Count().IsEqualTo(expected: 1);
+        await Assert.That(value: merged.Packages[0].Name).IsEqualTo("Lib");
+        await Assert.That(value: merged.Packages[0].Classes).Count().IsEqualTo(expected: 1);
 
         // Verify individual line hits took the max
         var cls = merged.Packages[0].Classes[0];
-        await Assert.That(cls.Lines).Count().IsEqualTo(3);
-        await Assert.That(cls.Lines[0].Hits).IsEqualTo(5);  // max(5, 0)
-        await Assert.That(cls.Lines[1].Hits).IsEqualTo(7);  // max(0, 7)
-        await Assert.That(cls.Lines[2].Hits).IsEqualTo(3);  // max(3, 0)
+        await Assert.That(cls.Lines).Count().IsEqualTo(expected: 3);
+        await Assert.That(value: cls.Lines[0].Hits).IsEqualTo(expected: 5); // max(5, 0)
+        await Assert.That(value: cls.Lines[1].Hits).IsEqualTo(expected: 7); // max(0, 7)
+        await Assert.That(value: cls.Lines[2].Hits).IsEqualTo(expected: 3); // max(3, 0)
     }
 
-    /// <summary>
-    /// Verifies that merging two reports takes the best branch coverage for each line.
-    /// </summary>
+    /// <summary>Verifies that merging two reports takes the best branch coverage for each line.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task MergeReports_SameClass_TakesBestBranchCoverage()
@@ -340,15 +312,13 @@ public class CoverageServiceTests
         var merged = CoverageService.MergeReports([reportA, reportB]);
 
         var cls = merged.Packages[0].Classes[0];
-        await Assert.That(cls.Lines[0].Hits).IsEqualTo(3);              // max(3, 2)
-        await Assert.That(cls.Lines[0].CoveredBranches).IsEqualTo(2);   // max(1, 2)
-        await Assert.That(cls.Lines[0].TotalBranches).IsEqualTo(2);
-        await Assert.That(cls.Lines[0].AllBranchesCovered).IsTrue();
+        await Assert.That(value: cls.Lines[0].Hits).IsEqualTo(expected: 3); // max(3, 2)
+        await Assert.That(value: cls.Lines[0].CoveredBranches).IsEqualTo(expected: 2); // max(1, 2)
+        await Assert.That(value: cls.Lines[0].TotalBranches).IsEqualTo(expected: 2);
+        await Assert.That(value: cls.Lines[0].AllBranchesCovered).IsTrue();
     }
 
-    /// <summary>
-    /// Verifies that merging reports with disjoint packages preserves both.
-    /// </summary>
+    /// <summary>Verifies that merging reports with disjoint packages preserves both.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task MergeReports_DisjointPackages_PreservesBoth()
@@ -395,13 +365,11 @@ public class CoverageServiceTests
 
         var merged = CoverageService.MergeReports([reportA, reportB]);
 
-        await Assert.That(merged.Packages).Count().IsEqualTo(2);
-        await Assert.That(merged.CoveredLineCount).IsEqualTo(2);
+        await Assert.That(merged.Packages).Count().IsEqualTo(expected: 2);
+        await Assert.That(merged.CoveredLineCount).IsEqualTo(expected: 2);
     }
 
-    /// <summary>
-    /// Verifies that merging picks the latest timestamp across reports.
-    /// </summary>
+    /// <summary>Verifies that merging picks the latest timestamp across reports.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task MergeReports_PicksLatestTimestamp()
@@ -425,12 +393,10 @@ public class CoverageServiceTests
         var merged = CoverageService.MergeReports([reportA, reportB]);
 
         await Assert.That(merged.Timestamp).IsNotNull();
-        await Assert.That(merged.Timestamp!.Value).IsEqualTo(DateTimeOffset.FromUnixTimeSeconds(1700000099));
+        await Assert.That(merged.Timestamp!.Value).IsEqualTo(expected: DateTimeOffset.FromUnixTimeSeconds(seconds: 1_700_000_099));
     }
 
-    /// <summary>
-    /// Verifies that merging a single report returns it unchanged.
-    /// </summary>
+    /// <summary>Verifies that merging a single report returns it unchanged.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     public async Task MergeReports_SingleReport_PassesThrough()
@@ -458,8 +424,8 @@ public class CoverageServiceTests
 
         var merged = CoverageService.MergeReports([report]);
 
-        await Assert.That(merged.CoverableLineCount).IsEqualTo(2);
-        await Assert.That(merged.CoveredLineCount).IsEqualTo(1);
-        await Assert.That(merged.MissedLineCount).IsEqualTo(1);
+        await Assert.That(merged.CoverableLineCount).IsEqualTo(expected: 2);
+        await Assert.That(merged.CoveredLineCount).IsEqualTo(expected: 1);
+        await Assert.That(merged.MissedLineCount).IsEqualTo(expected: 1);
     }
 }
