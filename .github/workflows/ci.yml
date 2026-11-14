@@ -19,9 +19,10 @@ jobs:
       with:
         fetch-depth: 0
     - name: Setup .NET
-      uses: glennawatson/actions-common/.github/actions/setup-sdk@main
+      uses: glennawatson/actions-common/.github/actions/dotnet-environment@main
       with:
-        dotnet-version: |
+        stamp-version: 'false'
+        dotnet-versions: |
           10.0.x
           11.0.x
     - name: Setup NBGV
@@ -29,33 +30,9 @@ jobs:
       with:
         setAllVars: true
     - name: Restore
-      uses: glennawatson/actions-common/.github/actions/run-command@main
-      with:
-        command: dotnet
-        arguments: |-
-          restore
-          src/UnitTestMcp.slnx
-        working-directory: .
+      run: dotnet restore src/UnitTestMcp.slnx
     - name: Build
-      uses: glennawatson/actions-common/.github/actions/run-command@main
-      with:
-        command: dotnet
-        arguments: |-
-          build
-          src/UnitTestMcp.slnx
-          --no-restore
-          --configuration
-          Release
-        working-directory: .
+      run: dotnet build src/UnitTestMcp.slnx --no-restore --configuration Release
     - name: Test
-      uses: glennawatson/actions-common/.github/actions/run-command@main
-      with:
-        command: dotnet
-        arguments: |-
-          test
-          --solution
-          UnitTestMcp.slnx
-          --no-build
-          --configuration
-          Release
-        working-directory: src
+      run: dotnet test --solution UnitTestMcp.slnx --no-build --configuration Release --no-progress
+      working-directory: src
